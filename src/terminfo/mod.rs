@@ -24,8 +24,8 @@ impl Desc {
         let name = name.as_ref();
 
         let first_char = match name.to_str() {
-            Some(s) => s.chars().next().unwrap(),
-            None => return None,
+            Some(s) if !s.is_empty() => s.chars().next().unwrap(),
+            _ => return None,
         };
         let first_hex = format!("{:x}", first_char as usize);
         let first_char = first_char.to_string();

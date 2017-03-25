@@ -1,0 +1,10 @@
+[package]
+name = "tvis"
+version = "0.1.0"
+authors = ["Ed McCardell <edmccard@hotmail.com>"]
+license = "MIT/Apache-2.0"
+description = """
+A console/terminal UI library
+"""
+
+[dependencies]

@@ -1,6 +1,5 @@
 use std::env;
 use std::error;
-use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::File;
 use std::io;
@@ -20,19 +19,18 @@ pub struct Desc {
 }
 
 impl Desc {
-    pub fn file<S: AsRef<OsStr>>(name: S) -> Option<File> {
-        let name = name.as_ref();
+    pub fn file(name: &str) -> Option<File> {
+        if name.is_empty() {
+            return None;
+        }
 
-        let first_char = match name.to_str() {
-            Some(s) if !s.is_empty() => s.chars().next().unwrap(),
-            _ => return None,
-        };
+        let first_char = name.chars().next().unwrap();
         let first_hex = format!("{:x}", first_char as usize);
         let first_char = first_char.to_string();
 
-        let d1 = to_path(env::var_os("TERMINFO"));
+        let d1 = to_path(env::var("TERMINFO").ok());
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
-        let d3 = to_paths(env::var_os("TERMINFO_DIRS"));
+        let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
         let d3 = d3.into_iter().map(|d| if d.as_os_str().is_empty() {
                                         PathBuf::from("/usr/share/terminfo")
                                     } else {
@@ -197,7 +195,7 @@ fn to_path<T: Into<PathBuf>>(var: Option<T>) -> Option<PathBuf> {
     }
 }
 
-fn to_paths(var: Option<OsString>) -> Vec<PathBuf> {
+fn to_paths(var: Option<String>) -> Vec<PathBuf> {
     match var {
         None => Vec::new(),
         Some(ref d) if d.is_empty() => Vec::new(),

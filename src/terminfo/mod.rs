@@ -11,6 +11,7 @@ use std::str;
 
 pub mod cap;
 
+
 pub struct Desc {
     pub names: Vec<String>,
     pub bools: Vec<bool>,
@@ -19,13 +20,13 @@ pub struct Desc {
 }
 
 impl Desc {
-    pub fn file(term_name: &str) -> Option<File> {
+    pub fn file(term_name: &str) -> Result<File, DescError> {
         if term_name.is_empty() {
-            return None;
+            return Err(name_error(term_name));
         }
         match Path::new(term_name).file_name() {
             Some(fname) if fname == Path::new(term_name).as_os_str() => (),
-            _ => return None,
+            _ => return Err(name_error(term_name)),
         }
 
         let first_char = term_name.chars().next().unwrap();
@@ -50,16 +51,16 @@ impl Desc {
 
         for d in ds {
             if let Ok(f) = File::open(d.join(&first_char).join(term_name)) {
-                return Some(f);
+                return Ok(f);
             }
             if let Ok(f) = File::open(d.join(&first_hex).join(term_name)) {
-                return Some(f);
+                return Ok(f);
             }
         }
-        return None;
+        return Err(absent_error(term_name));
     }
 
-    pub fn parse(r: &mut Read) -> Result<Desc, ParseError> {
+    pub fn parse(r: &mut Read) -> Result<Desc, DescError> {
         let header = read_words(r, 6)?;
         if header[0] != 282 {
             return Err(parse_error("wrong magic number"));
@@ -134,53 +135,71 @@ impl Desc {
 
 
 #[derive(Debug)]
-pub struct ParseError {
-    inner: ParseErrorImpl,
+pub struct DescError {
+    inner: DescErrorImpl,
 }
 
-fn parse_error(msg: &str) -> ParseError {
-    ParseError { inner: ParseErrorImpl::Other(msg.to_owned()) }
+fn parse_error(msg: &str) -> DescError {
+    DescError { inner: DescErrorImpl::Parse(msg.to_owned()) }
+}
+
+fn absent_error(name: &str) -> DescError {
+    DescError { inner: DescErrorImpl::Absent(name.to_owned()) }
+}
+
+fn name_error(name: &str) -> DescError {
+    DescError { inner: DescErrorImpl::Name(name.to_owned()) }
 }
 
 #[derive(Debug)]
-enum ParseErrorImpl {
+enum DescErrorImpl {
     Io(io::Error),
-    Other(String),
+    Parse(String),
+    Absent(String),
+    Name(String),
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for DescError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
-            ParseErrorImpl::Io(ref err) => err.fmt(f),
-            ParseErrorImpl::Other(ref msg) => write!(f, "{}", msg),
+            DescErrorImpl::Io(ref err) => err.fmt(f),
+            DescErrorImpl::Parse(ref msg) => write!(f, "{}", msg),
+            DescErrorImpl::Absent(ref name) => {
+                write!(f, "no description found for {}", name)
+            }
+            DescErrorImpl::Name(ref name) => {
+                write!(f, "invalid terminal name '{}'", name)
+            }
         }
     }
 }
 
-impl error::Error for ParseError {
+impl error::Error for DescError {
     fn description(&self) -> &str {
         match self.inner {
-            ParseErrorImpl::Io(ref err) => err.description(),
-            _ => "invalid terminfo description",
+            DescErrorImpl::Io(ref err) => err.description(),
+            DescErrorImpl::Parse(..) => "invalid terminfo description",
+            DescErrorImpl::Absent(..) => "missing terminfo description",
+            DescErrorImpl::Name(..) => "invalid terminal name",
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match self.inner {
-            ParseErrorImpl::Io(ref err) => err.cause(),
+            DescErrorImpl::Io(ref err) => err.cause(),
             _ => None,
         }
     }
 }
 
-impl From<io::Error> for ParseError {
-    fn from(err: io::Error) -> ParseError {
-        ParseError { inner: ParseErrorImpl::Io(err) }
+impl From<io::Error> for DescError {
+    fn from(err: io::Error) -> DescError {
+        DescError { inner: DescErrorImpl::Io(err) }
     }
 }
 
-impl From<str::Utf8Error> for ParseError {
-    fn from(err: str::Utf8Error) -> ParseError {
+impl From<str::Utf8Error> for DescError {
+    fn from(err: str::Utf8Error) -> DescError {
         parse_error(&err.to_string())
     }
 }

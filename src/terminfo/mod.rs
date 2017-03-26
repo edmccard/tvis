@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::slice;
 use std::str;
 
@@ -19,12 +19,16 @@ pub struct Desc {
 }
 
 impl Desc {
-    pub fn file(name: &str) -> Option<File> {
-        if name.is_empty() {
+    pub fn file(term_name: &str) -> Option<File> {
+        if term_name.is_empty() {
             return None;
         }
+        match Path::new(term_name).file_name() {
+            Some(fname) if fname == Path::new(term_name).as_os_str() => (),
+            _ => return None,
+        }
 
-        let first_char = name.chars().next().unwrap();
+        let first_char = term_name.chars().next().unwrap();
         let first_hex = format!("{:x}", first_char as usize);
         let first_char = first_char.to_string();
 
@@ -45,10 +49,10 @@ impl Desc {
             .chain(d4.into_iter());
 
         for d in ds {
-            if let Ok(f) = File::open(d.join(&first_char).join(name)) {
+            if let Ok(f) = File::open(d.join(&first_char).join(term_name)) {
                 return Some(f);
             }
-            if let Ok(f) = File::open(d.join(&first_hex).join(name)) {
+            if let Ok(f) = File::open(d.join(&first_hex).join(term_name)) {
                 return Some(f);
             }
         }

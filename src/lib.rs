@@ -1,5 +1,8 @@
 pub mod terminfo;
 
+#[cfg(windows)]
+pub mod console;
+
 #[cfg(test)]
 mod tests {
     #[test]

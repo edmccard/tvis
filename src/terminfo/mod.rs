@@ -75,9 +75,6 @@ impl Desc {
         }
         let names = str::from_utf8(&name_buf[0..name_sz - 1])?;
         let names: Vec<_> = names.split('|').map(str::to_owned).collect();
-        if names.len() < 2 {
-            return Err(parse_error("too few items in name section"));
-        }
 
         let bools_num = header[2] as usize;
         if bools_num > cap::NUM_BOOLS {
@@ -108,7 +105,7 @@ impl Desc {
         let mut strings = Vec::new();
         for pos in offsets {
             let pos = pos as usize;
-            if pos == 0xffff {
+            if pos == 0xffff || pos == 0xfffe {
                 strings.push(String::new());
             } else if pos >= string_sz {
                 return Err(parse_error("invalid string offset"));

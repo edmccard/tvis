@@ -19,7 +19,11 @@ pub trait Capability<T> {
 impl Capability<Boolean> for super::Desc {
     type Output = bool;
     fn capability(&self, cpb: Boolean) -> bool {
-        self.bools[cpb.0]
+        if self.bools.len() > cpb.0 {
+            self.bools[cpb.0]
+        } else {
+            false
+        }
     }
 }
 

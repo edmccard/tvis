@@ -8,15 +8,14 @@ use std::path::{Path, PathBuf};
 use std::slice;
 use std::str;
 
-
 pub mod cap;
 
 
 pub struct Desc {
-    pub names: Vec<String>,
-    pub bools: Vec<bool>,
-    pub nums: Vec<u16>,
-    pub strings: Vec<String>,
+    names: Vec<String>,
+    bools: Vec<bool>,
+    nums: Vec<u16>,
+    strings: Vec<String>,
 }
 
 impl Desc {
@@ -130,6 +129,10 @@ impl Desc {
                nums: nums,
                strings: strings,
            })
+    }
+
+    pub fn names(&self) -> slice::Iter<String> {
+        self.names.iter()
     }
 }
 

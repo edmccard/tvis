@@ -1,6 +1,5 @@
 #![allow(non_upper_case_globals)]
 
-
 // Naming differences:
 // in -> in_
 // if => if_
@@ -11,6 +10,32 @@
 pub struct Boolean(usize);
 pub struct Number(usize);
 pub struct String(usize);
+
+pub trait Capability<T> {
+    type Output;
+    fn capability(&self, cpb: T) -> Self::Output;
+}
+
+impl Capability<Boolean> for super::Desc {
+    type Output = bool;
+    fn capability(&self, cpb: Boolean) -> bool {
+        self.bools[cpb.0]
+    }
+}
+
+impl Capability<Number> for super::Desc {
+    type Output = u16;
+    fn capability(&self, cpb: Number) -> u16 {
+        self.nums[cpb.0]
+    }
+}
+
+impl<'a> Capability<String> for &'a super::Desc {
+    type Output = &'a str;
+    fn capability(&self, cpb: String) -> &'a str {
+        &self.strings[cpb.0]
+    }
+}
 
 pub const bw: Boolean = Boolean(0);
 pub const am: Boolean = Boolean(1);

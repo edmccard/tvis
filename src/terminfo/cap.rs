@@ -30,14 +30,24 @@ impl Capability<Boolean> for super::Desc {
 impl Capability<Number> for super::Desc {
     type Output = u16;
     fn capability(&self, cpb: Number) -> u16 {
-        self.nums[cpb.0]
+        if self.nums.len() > cpb.0 {
+            self.nums[cpb.0]
+        } else {
+            0xffff
+        }
     }
 }
+
+static NO_STR_CAP: &'static str = "";
 
 impl<'a> Capability<String> for &'a super::Desc {
     type Output = &'a str;
     fn capability(&self, cpb: String) -> &'a str {
-        &self.strings[cpb.0]
+        if self.strings.len() > cpb.0 {
+            &self.strings[cpb.0]
+        } else {
+            NO_STR_CAP
+        }
     }
 }
 

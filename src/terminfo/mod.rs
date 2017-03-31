@@ -15,7 +15,7 @@ pub struct Desc {
     names: Vec<String>,
     bools: Vec<bool>,
     nums: Vec<u16>,
-    strings: Vec<String>,
+    strings: Vec<Vec<u8>>,
 }
 
 impl Desc {
@@ -106,15 +106,14 @@ impl Desc {
         for pos in offsets {
             let pos = pos as usize;
             if pos == 0xffff || pos == 0xfffe {
-                strings.push(String::new());
+                strings.push(Vec::new());
             } else if pos >= string_sz {
                 return Err(parse_error("invalid string offset"));
             } else {
                 match str_table[pos..].iter().position(|&b| b == 0) {
                     None => return Err(parse_error("unterminated string")),
                     Some(end) => {
-                        let s = str::from_utf8(&str_table[pos..pos + end])?;
-                        strings.push(s.to_owned());
+                        strings.push(str_table[pos..pos + end].to_vec());
                     }
                 }
             }

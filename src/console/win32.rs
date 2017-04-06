@@ -10,264 +10,264 @@ extern "system" {
         share_mode: u32,
         security_attributes: *const SecurityAttributes,
         flags: u32,
-        screen_buffer_data: *mut Void)
-        -> Handle;
+        screen_buffer_data: *mut Void,
+    ) -> Handle;
     pub fn FillConsoleOutputAttribute(
         console_output: Handle,
         attribute: u16,
         length: u32,
         write_coord: Coord,
-        number_of_attrs_written: *mut u32)
-        -> Bool;
+        number_of_attrs_written: *mut u32,
+    ) -> Bool;
     pub fn FillConsoleOutputCharacterA(
         console_output: Handle,
         character: Char,
         length: u32,
         write_coord: Coord,
-        number_of_chars_written: *mut u32)
-        -> Bool;
+        number_of_chars_written: *mut u32,
+    ) -> Bool;
     pub fn FillConsoleOutputCharacterW(
         console_output: Handle,
         character: WChar,
         length: u32,
         write_coord: Coord,
-        number_of_chars_written: *mut u32)
-        -> Bool;
+        number_of_chars_written: *mut u32,
+    ) -> Bool;
     pub fn FlushConsoleInputBuffer(console_input: Handle) -> Bool;
     pub fn FreeConsole() -> Bool;
     pub fn GenerateConsoleCtrlEvent(
         control_event: u32,
-        process_group_id: u32)
-        -> Bool;
+        process_group_id: u32,
+    ) -> Bool;
     pub fn GetConsoleCP() -> u32;
     pub fn GetConsoleCursorInfo(
         console_output: Handle,
-        console_cursor_info: *mut ConsoleCursorInfo)
-        -> Bool;
+        console_cursor_info: *mut ConsoleCursorInfo,
+    ) -> Bool;
     pub fn GetConsoleDisplayMode(mode_flags: *mut u32) -> Bool;
     pub fn GetConsoleFontSize(console_output: Handle, font: u32) -> Coord;
     pub fn GetConsoleHistoryInfo(
-        console_history_info: *mut ConsoleHistoryInfo)
-        -> Bool;
+        console_history_info: *mut ConsoleHistoryInfo,
+    ) -> Bool;
     pub fn GetConsoleMode(console_handle: Handle, mode: *mut u32) -> Bool;
     pub fn GetConsoleOriginalTitleA(
         console_title: *mut Char,
-        size: u32)
-        -> u32;
+        size: u32,
+    ) -> u32;
     pub fn GetConsoleOriginalTitleW(
         console_title: *mut WChar,
-        size: u32)
-        -> u32;
+        size: u32,
+    ) -> u32;
     pub fn GetConsoleOutputCP() -> u32;
     pub fn GetConsoleProcessList(
         process_list: *mut u32,
-        process_count: u32)
-        -> u32;
+        process_count: u32,
+    ) -> u32;
     pub fn GetConsoleScreenBufferInfo(
         console_output: Handle,
-        console_screen_buffer_info: *mut ConsoleScreenBufferInfo)
-        -> Bool;
+        console_screen_buffer_info: *mut ConsoleScreenBufferInfo,
+    ) -> Bool;
     pub fn GetConsoleScreenBufferInfoEx(
         console_output: Handle,
-        console_screen_buffer_info_ex: *mut ConsoleScreenBufferInfoEx)
-        -> Bool;
+        console_screen_buffer_info_ex: *mut ConsoleScreenBufferInfoEx,
+    ) -> Bool;
     pub fn GetConsoleSelectionInfo(
-        console_selection_info: *mut ConsoleSelectionInfo)
-        -> Bool;
+        console_selection_info: *mut ConsoleSelectionInfo,
+    ) -> Bool;
     pub fn GetConsoleTitleA(console_title: *mut Char, size: u32) -> u32;
     pub fn GetConsoleTitleW(console_title: *mut WChar, size: u32) -> u32;
     pub fn GetConsoleWindow() -> Handle;
     pub fn GetCurrentConsoleFont(
         console_output: Handle,
         maximum_window: Bool,
-        console_current_font: *mut ConsoleFontInfo)
-        -> Bool;
+        console_current_font: *mut ConsoleFontInfo,
+    ) -> Bool;
     pub fn GetCurrentConsoleFontEx(
         console_output: Handle,
         maximum_window: Bool,
-        console_current_font_ex: *mut ConsoleFontInfoEx)
-        -> Bool;
+        console_current_font_ex: *mut ConsoleFontInfoEx,
+    ) -> Bool;
     pub fn GetLargestConsoleWindowSize(console_output: Handle) -> Coord;
     pub fn GetLastError() -> u32;
     pub fn GetNumberOfConsoleInputEvents(
         console_input: Handle,
-        number_of_events: *mut u32)
-        -> Bool;
+        number_of_events: *mut u32,
+    ) -> Bool;
     pub fn GetNumberOfConsoleMouseButtons(
-        number_of_mouse_buttons: *mut u32)
-        -> Bool;
+        number_of_mouse_buttons: *mut u32,
+    ) -> Bool;
     pub fn GetStdHandle(std_handle: u32) -> Handle;
     pub fn PeekConsoleInput(
         console_input: Handle,
         buffer: *mut InputRecord,
         length: u32,
-        number_of_events_read: *mut u32)
-        -> Bool;
+        number_of_events_read: *mut u32,
+    ) -> Bool;
     pub fn ReadConsole(
         console_input: Handle,
         buffer: *mut Void,
         number_of_chars_to_read: u32,
         number_of_chars_read: *mut u32,
-        input_control: *mut Void)
-        -> Bool;
+        input_control: *mut Void,
+    ) -> Bool;
     pub fn ReadConsoleInput(
         console_input: Handle,
         buffer: *mut InputRecord,
         length: u32,
-        number_of_events_read: *mut u32)
-        -> Bool;
+        number_of_events_read: *mut u32,
+    ) -> Bool;
     pub fn ReadConsoleOutputA(
         console_output: Handle,
         buffer: *mut CharInfo,
         buffer_size: Coord,
         buffer_coord: Coord,
-        read_region: *mut SmallRect)
-        -> Bool;
+        read_region: *mut SmallRect,
+    ) -> Bool;
     pub fn ReadConsoleOutputW(
         console_output: Handle,
         buffer: *mut CharInfo,
         buffer_size: Coord,
         buffer_coord: Coord,
-        read_region: *mut SmallRect)
-        -> Bool;
+        read_region: *mut SmallRect,
+    ) -> Bool;
     pub fn ReadConsoleOutputAttribute(
         console_output: Handle,
         attribute: *mut u16,
         length: u32,
         read_coord: Coord,
-        number_of_attrs_read: *mut u32)
-        -> Bool;
+        number_of_attrs_read: *mut u32,
+    ) -> Bool;
     pub fn ReadConsoleOutputCharacterA(
         console_output: Handle,
         character: *mut Char,
         length: u32,
         read_coord: Coord,
-        number_of_chars_read: *mut u32)
-        -> Bool;
+        number_of_chars_read: *mut u32,
+    ) -> Bool;
     pub fn ReadConsoleOutputCharacterW(
         console_output: Handle,
         character: *mut WChar,
         length: u32,
         read_coord: Coord,
-        number_of_chars_read: *mut u32)
-        -> Bool;
+        number_of_chars_read: *mut u32,
+    ) -> Bool;
     pub fn ScrollConsoleScreenBufferA(
         console_output: Handle,
         scroll_rectangle: *const SmallRect,
         clip_rectangle: *const SmallRect,
         destination_origin: Coord,
-        fill: *const CharInfo)
-        -> Bool;
+        fill: *const CharInfo,
+    ) -> Bool;
     pub fn ScrollConsoleScreenBufferW(
         console_output: Handle,
         scroll_rectangle: *const SmallRect,
         clip_rectangle: *const SmallRect,
         destination_origin: Coord,
-        fill: *const CharInfo)
-        -> Bool;
+        fill: *const CharInfo,
+    ) -> Bool;
     pub fn SetConsoleActiveScreenBuffer(console_output: Handle) -> Bool;
     pub fn SetConsoleCP(code_page_id: u32) -> Bool;
     pub fn SetConsoleCtrlHandler(
         handler_routine: HandlerRoutine,
-        add: Bool)
-        -> Bool;
+        add: Bool,
+    ) -> Bool;
     pub fn SetConsoleCursorInfo(
         console_output: Handle,
-        console_cursor_info: *const ConsoleCursorInfo)
-        -> Bool;
+        console_cursor_info: *const ConsoleCursorInfo,
+    ) -> Bool;
     pub fn SetConsoleCursorPosition(
         console_output: Handle,
-        cursor_position: Coord)
-        -> Bool;
+        cursor_position: Coord,
+    ) -> Bool;
     pub fn SetConsoleDisplayMode(
         console_output: Handle,
         flags: u32,
-        new_screen_buffer_dimensions: *mut Coord)
-        -> Bool;
+        new_screen_buffer_dimensions: *mut Coord,
+    ) -> Bool;
     pub fn SetConsoleHistoryInfo(
-        console_history_info: *mut ConsoleHistoryInfo)
-        -> Bool;
+        console_history_info: *mut ConsoleHistoryInfo,
+    ) -> Bool;
     pub fn SetConsoleMode(console_handle: Handle, mode: u32) -> Bool;
     pub fn SetConsoleOutputCP(code_page_id: u32) -> Bool;
     pub fn SetConsoleScreenBufferInfoEx(
         console_output: Handle,
-        console_screen_buffer_info_ex: *mut ConsoleScreenBufferInfoEx)
-        -> Bool;
+        console_screen_buffer_info_ex: *mut ConsoleScreenBufferInfoEx,
+    ) -> Bool;
     pub fn SetConsoleScreenBufferSize(
         console_output: Handle,
-        size: Coord)
-        -> Bool;
+        size: Coord,
+    ) -> Bool;
     pub fn SetConsoleTextAttribute(
         console_output: Handle,
-        attributes: u16)
-        -> Bool;
+        attributes: u16,
+    ) -> Bool;
     pub fn SetConsoleTitleA(console_title: *const Char) -> Bool;
     pub fn SetConsoleTitleW(console_title: *const WChar) -> Bool;
     pub fn SetConsoleWindowInfo(
         console_output: Handle,
         absolute: Bool,
-        console_window: *const SmallRect)
-        -> Bool;
+        console_window: *const SmallRect,
+    ) -> Bool;
     pub fn SetCurrentConsoleFontEx(
         console_output: Handle,
         maximum_window: Bool,
-        console_current_font_ex: *mut ConsoleFontInfoEx)
-        -> Bool;
+        console_current_font_ex: *mut ConsoleFontInfoEx,
+    ) -> Bool;
     pub fn SetStdHandle(std_handle: u32, handle: Handle) -> Bool;
     pub fn WriteConsole(
         console_output: Handle,
         buffer: *const Void,
         number_of_chars_to_write: u32,
         number_of_chars_written: *mut u32,
-        reserved: *mut Void)
-        -> Bool;
+        reserved: *mut Void,
+    ) -> Bool;
     pub fn WriteConsoleInput(
         console_input: Handle,
         buffer: *const InputRecord,
         length: u32,
-        number_of_events_written: *mut u32)
-        -> Bool;
+        number_of_events_written: *mut u32,
+    ) -> Bool;
     pub fn WriteConsoleOutputA(
         console_output: Handle,
         buffer: *const CharInfo,
         buffer_size: Coord,
         buffer_coord: Coord,
-        write_region: *mut SmallRect)
-        -> Bool;
+        write_region: *mut SmallRect,
+    ) -> Bool;
     pub fn WriteConsoleOutputW(
         console_output: Handle,
         buffer: *const CharInfo,
         buffer_size: Coord,
         buffer_coord: Coord,
-        write_region: *mut SmallRect)
-        -> Bool;
+        write_region: *mut SmallRect,
+    ) -> Bool;
     pub fn WriteConsoleOutputAttribute(
         console_output: Handle,
         attribute: *const u16,
         length: u32,
         write_coord: Coord,
-        number_of_attrs_written: *mut u32)
-        -> Bool;
+        number_of_attrs_written: *mut u32,
+    ) -> Bool;
     pub fn WriteConsoleOutputCharacterA(
         console_output: Handle,
         character: *const Char,
         length: u32,
         write_coord: Coord,
-        number_of_chars_written: *mut u32)
-        -> Bool;
+        number_of_chars_written: *mut u32,
+    ) -> Bool;
     pub fn WriteConsoleOutputCharacterW(
         console_output: Handle,
         character: *const WChar,
         length: u32,
         write_coord: Coord,
-        number_of_chars_written: *mut u32)
-        -> Bool;
+        number_of_chars_written: *mut u32,
+    ) -> Bool;
 }
 
 pub enum Void {}
 
-pub type HandlerRoutine = Option<unsafe extern "system" fn(ctrl_type: u32)
-                                                           -> Bool>;
+pub type HandlerRoutine =
+    Option<unsafe extern "system" fn(ctrl_type: u32) -> Bool>;
 
 #[repr(C)]
 #[derive(Copy, Clone)]

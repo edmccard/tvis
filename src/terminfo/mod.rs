@@ -36,14 +36,18 @@ impl Desc {
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
         let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
         let d3 = d3.into_iter()
-            .map(|d| if d.as_os_str().is_empty() {
-                     PathBuf::from("/usr/share/terminfo")
-                 } else {
-                     d
-                 });
-        let d4 = vec![PathBuf::from("/etc/terminfo"),
-                      PathBuf::from("/lib/terminfo"),
-                      PathBuf::from("/usr/share/terminfo")];
+            .map(
+                |d| if d.as_os_str().is_empty() {
+                    PathBuf::from("/usr/share/terminfo")
+                } else {
+                    d
+                },
+            );
+        let d4 = vec![
+            PathBuf::from("/etc/terminfo"),
+            PathBuf::from("/lib/terminfo"),
+            PathBuf::from("/usr/share/terminfo"),
+        ];
         let ds = d1.into_iter()
             .chain(d2.into_iter())
             .chain(d3)
@@ -121,12 +125,14 @@ impl Desc {
             }
         }
 
-        Ok(Desc {
-               names: names,
-               bools: bools,
-               nums: nums,
-               strings: strings,
-           })
+        Ok(
+            Desc {
+                names: names,
+                bools: bools,
+                nums: nums,
+                strings: strings,
+            },
+        )
     }
 
     pub fn names(&self) -> slice::Iter<String> {
@@ -231,8 +237,12 @@ fn to_paths(var: Option<String>) -> Vec<PathBuf> {
 fn read_bytes(r: &mut Read, n: usize) -> io::Result<Vec<u8>> {
     let mut buf = Vec::with_capacity(n);
     if r.take(n as u64).read_to_end(&mut buf)? < n {
-        return Err(io::Error::new(io::ErrorKind::UnexpectedEof,
-                                  "failed to fill whole buffer"));
+        return Err(
+            io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "failed to fill whole buffer",
+            ),
+        );
     }
     Ok(buf)
 }

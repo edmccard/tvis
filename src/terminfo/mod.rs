@@ -35,11 +35,12 @@ impl Desc {
         let d1 = to_path(env::var("TERMINFO").ok());
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
         let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
-        let d3 = d3.into_iter().map(|d| if d.as_os_str().is_empty() {
-                                        PathBuf::from("/usr/share/terminfo")
-                                    } else {
-                                        d
-                                    });
+        let d3 = d3.into_iter()
+            .map(|d| if d.as_os_str().is_empty() {
+                     PathBuf::from("/usr/share/terminfo")
+                 } else {
+                     d
+                 });
         let d4 = vec![PathBuf::from("/etc/terminfo"),
                       PathBuf::from("/lib/terminfo"),
                       PathBuf::from("/usr/share/terminfo")];
@@ -81,7 +82,8 @@ impl Desc {
             return Err(parse_error("too many boolean flags"));
         }
         let bool_buf = read_bytes(r, bools_num)?;
-        let bools = bool_buf.into_iter()
+        let bools = bool_buf
+            .into_iter()
             .map(|b| if b == 0 { false } else { true })
             .collect();
 

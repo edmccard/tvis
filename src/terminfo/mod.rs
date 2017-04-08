@@ -168,13 +168,14 @@ enum DescErrorImpl {
 
 impl fmt::Display for DescError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::DescErrorImpl::*;
         match self.inner {
-            DescErrorImpl::Io(ref err) => err.fmt(f),
-            DescErrorImpl::Parse(ref msg) => write!(f, "{}", msg),
-            DescErrorImpl::Absent(ref name) => {
+            Io(ref err) => err.fmt(f),
+            Parse(ref msg) => write!(f, "{}", msg),
+            Absent(ref name) => {
                 write!(f, "no description found for {}", name)
             }
-            DescErrorImpl::Name(ref name) => {
+            Name(ref name) => {
                 write!(f, "invalid terminal name '{}'", name)
             }
         }
@@ -183,17 +184,19 @@ impl fmt::Display for DescError {
 
 impl error::Error for DescError {
     fn description(&self) -> &str {
+        use self::DescErrorImpl::*;
         match self.inner {
-            DescErrorImpl::Io(ref err) => err.description(),
-            DescErrorImpl::Parse(..) => "invalid terminfo description",
-            DescErrorImpl::Absent(..) => "missing terminfo description",
-            DescErrorImpl::Name(..) => "invalid terminal name",
+            Io(ref err) => err.description(),
+            Parse(..) => "invalid terminfo description",
+            Absent(..) => "missing terminfo description",
+            Name(..) => "invalid terminal name",
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
+        use self::DescErrorImpl::*;
         match self.inner {
-            DescErrorImpl::Io(ref err) => err.cause(),
+            Io(ref err) => err.cause(),
             _ => None,
         }
     }

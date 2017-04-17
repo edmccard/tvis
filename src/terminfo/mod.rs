@@ -4,11 +4,15 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::iter;
 use std::path::{Path, PathBuf};
 use std::slice;
 use std::str;
 
+use self::printf::Formatter;
+
 pub mod cap;
+mod printf;
 
 
 pub struct Desc {
@@ -141,6 +145,535 @@ impl Desc {
 }
 
 
+#[derive(Clone, Debug)]
+pub enum Param {
+    Absent,
+    Int(i32),
+    Str(Vec<u8>),
+}
+
+impl Default for Param {
+    fn default() -> Param {
+        Param::Absent
+    }
+}
+
+impl From<i8> for Param {
+    fn from(int: i8) -> Param {
+        Param::Int(int as i32)
+    }
+}
+
+impl From<u8> for Param {
+    fn from(int: u8) -> Param {
+        Param::Int(int as i32)
+    }
+}
+
+impl From<i16> for Param {
+    fn from(int: i16) -> Param {
+        Param::Int(int as i32)
+    }
+}
+
+impl From<u16> for Param {
+    fn from(int: u16) -> Param {
+        Param::Int(int as i32)
+    }
+}
+
+impl From<i32> for Param {
+    fn from(int: i32) -> Param {
+        Param::Int(int)
+    }
+}
+
+impl<'a> From<&'a str> for Param {
+    fn from(str: &'a str) -> Param {
+        Param::Str(str.into())
+    }
+}
+
+impl From<String> for Param {
+    fn from(str: String) -> Param {
+        Param::Str(str.into())
+    }
+}
+
+impl<'a> From<&'a [u8]> for Param {
+    fn from(str: &'a [u8]) -> Param {
+        Param::Str(str.into())
+    }
+}
+
+impl From<Vec<u8>> for Param {
+    fn from(str: Vec<u8>) -> Param {
+        Param::Str(str)
+    }
+}
+
+#[derive(Debug)]
+pub struct Params([Param; 9]);
+
+impl Params {
+    pub fn new(params: [Param; 9]) -> Params {
+        Params(params)
+    }
+
+    // TODO: is accessing unspecified param an error?
+    fn get(&self, idx: usize) -> Result<Param, CapError> {
+        if idx < 1 || idx > 9 {
+            return Err(stx_error("param index must be 1-9"));
+        }
+        match self.0[idx - 1] {
+            Param::Absent => {
+                panic!("unspecified parameter");
+            }
+            ref p => Ok(p.clone()),
+        }
+    }
+
+    fn make_one_based(&mut self) {
+        use self::Param::*;
+        if let Int(i) = self.0[0] {
+            self.0[0] = Int(i + 1);
+        }
+        if let Int(i) = self.0[1] {
+            self.0[1] = Int(i + 1);
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! params {
+    () => {
+        $crate::terminfo::Params::new(
+            [Default::default(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             Default::default(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr,
+     $p4:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             $p4.into(), Default::default(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr,
+     $p4:expr, $p5:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             $p4.into(), $p5.into(), Default::default(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr,
+     $p4:expr, $p5:expr, $p6:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             $p4.into(), $p5.into(), $p6.into(),
+             Default::default(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr,
+     $p4:expr, $p5:expr, $p6:expr,
+     $p7:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             $p4.into(), $p5.into(), $p6.into(),
+             $p7.into(), Default::default(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr,
+     $p4:expr, $p5:expr, $p6:expr,
+     $p7:expr, $p8:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             $p4.into(), $p5.into(), $p6.into(),
+             $p7.into(), $p8.into(), Default::default(),
+            ])
+    };
+    ($p1:expr, $p2:expr, $p3:expr,
+     $p4:expr, $p5:expr, $p6:expr,
+     $p7:expr, $p8:expr, $p9:expr) => {
+        $crate::terminfo::Params::new(
+            [$p1.into(), $p2.into(), $p3.into(),
+             $p4.into(), $p5.into(), $p6.into(),
+             $p7.into(), $p8.into(), $p9.into(),
+            ])
+    };
+    ($($arg:tt),*) => {too many args to params};
+}
+
+pub struct Vars(Vec<Param>);
+
+impl Vars {
+    pub fn new() -> Vars {
+        Vars(Vec::new())
+    }
+
+    fn set(&mut self, name: char, param: Param) -> Result<(), CapError> {
+        let idx = self.idx(name)?;
+        if self.0.len() == 0 {
+            self.0 = vec![Param::Absent; 52];
+        }
+        self.0[idx] = param;
+        Ok(())
+    }
+
+    fn get(&self, name: char) -> Result<Param, CapError> {
+        let idx = self.idx(name)?;
+        if self.0.len() == 0 {
+            return Err(var_error(name));
+        }
+        match self.0[idx] {
+            Param::Absent => Err(var_error(name)),
+            ref p => Ok(p.clone()),
+        }
+    }
+
+    fn idx(&self, name: char) -> Result<usize, CapError> {
+        if name >= 'A' && name <= 'Z' {
+            Ok((name as u8 - b'A') as usize)
+        } else if name >= 'a' && name <= 'z' {
+            Ok(((name as u8 - b'a') as usize) + 26)
+        } else {
+            Err(stx_error("invalid variable name"))
+        }
+    }
+}
+
+struct ParamStack(Vec<Param>);
+
+impl ParamStack {
+    fn new() -> ParamStack {
+        ParamStack(Vec::new())
+    }
+
+    fn pop(&mut self) -> Result<Param, CapError> {
+        self.0.pop().ok_or(stx_error("pop from empty stack"))
+    }
+
+    fn pop_int(&mut self) -> Result<i32, CapError> {
+        match self.pop()? {
+            Param::Int(i) => Ok(i),
+            Param::Str(_) => panic!("string passed for int parameter"),
+            _ => unreachable!(),
+        }
+    }
+
+    fn pop_str(&mut self) -> Result<Vec<u8>, CapError> {
+        match self.pop()? {
+            Param::Str(s) => Ok(s),
+            Param::Int(_) => panic!("int passed for str parameter"),
+            _ => unreachable!(),
+        }
+    }
+
+    fn push(&mut self, param: Param) {
+        self.0.push(param);
+    }
+}
+
+struct CapIter<'a>(iter::Peekable<slice::Iter<'a, u8>>);
+
+impl<'a> CapIter<'a> {
+    fn new(cap: &[u8]) -> CapIter {
+        CapIter(cap.iter().peekable())
+    }
+
+    fn read(&mut self) -> Option<u8> {
+        self.0.next().map(|c| *c)
+    }
+
+    fn peek(&mut self) -> Option<u8> {
+        self.0.peek().map(|c| **c)
+    }
+
+    fn peek_char(&mut self) -> Result<char, CapError> {
+        match self.peek() {
+            Some(c) => Ok(c as char),
+            _ => Err(stx_error("unexpected string end")),
+        }
+    }
+
+    fn read_char(&mut self) -> Result<char, CapError> {
+        match self.read() {
+            Some(c) => Ok(c as char),
+            _ => Err(stx_error("unexpected string end")),
+        }
+    }
+
+    fn try_number(&mut self) -> Result<Option<u32>, CapError> {
+        let mut num = 0u32;
+        let mut found = false;
+        while let Some(d) = self.peek_char()?.to_digit(10) {
+            self.read_char()?;
+            num = num * 10 + d;
+            found = true;
+        }
+        Ok(if found { Some(num) } else { None })
+    }
+}
+
+pub fn tparm(
+    output: &mut Vec<u8>,
+    input: &[u8],
+    params: &mut Params,
+    vars: &mut Vars,
+) -> Result<(), CapError> {
+
+    use self::Param::*;
+
+    output.clear();
+    let mut cap = CapIter::new(input);
+    let mut stack = ParamStack::new();
+
+    loop {
+        // output literal data
+        loop {
+            match cap.read() {
+                Some(b'%') => break,
+                Some(c) => output.push(c),
+                None => return Ok(()),
+            }
+        }
+        // handle format specifier, if present
+        let mut fmt: Formatter = Default::default();
+        if let Some(_) = ":# 0".find(cap.peek_char()?) {
+            while let Some(_) = ":# -0".find(cap.peek_char()?) {
+                fmt.add_flag(cap.read_char()?);
+            }
+        }
+        if let Some(width) = cap.try_number()? {
+            fmt.set_width(width);
+        }
+        if cap.peek_char()? == '.' {
+            cap.read_char()?;
+            if let Some(prec) = cap.try_number()? {
+                fmt.set_prec(prec);
+            } else {
+                fmt.set_prec(0);
+            }
+        }
+        if fmt.specified() {
+            if !"cdoxXs".find(cap.peek_char()?).is_some() {
+                return Err(stx_error("unknown format specifier"));
+            }
+        }
+        // handle percent commands
+        match cap.read_char()? {
+            // push parameter
+            'p' => {
+                let c = cap.read_char()?;
+                match c.to_digit(10) {
+                    Some(d) => stack.push(params.get(d as usize)?),
+                    _ => return Err(stx_error("invalid param index")),
+                }
+            }
+            // add one to first two parameters
+            'i' => {
+                params.make_one_based();
+            }
+            // printing
+            'c' => {
+                // matching ncurses, we permit but ignore flags for
+                // the 'c' specifier
+                match stack.pop_int()? {
+                    0 => output.push(0x80),
+                    i => output.push(i as u8),
+                }
+            }
+            fs @ 'd' | fs @ 'o' | fs @ 'x' | fs @ 'X' => {
+                fmt.printf_int(output, fs, stack.pop_int()?);
+            }
+            's' => {
+                fmt.printf_str(output, stack.pop_str()?);
+            }
+            // if/then/else/endif
+            '?' => (),
+            't' => {
+                if stack.pop_int()? != 0 {
+                    continue;
+                }
+                let mut lev = 0;
+                loop {
+                    if cap.read_char()? == '%' {
+                        match cap.read_char()? {
+                            '?' => lev += 1,
+                            ';' if lev == 0 => break,
+                            ';' => lev -= 1,
+                            'e' if lev == 0 => break,
+                            _ => (),
+                        }
+                    }
+                }
+            }
+            'e' => {
+                let mut lev = 0;
+                loop {
+                    if cap.read_char()? == '%' {
+                        match cap.read_char()? {
+                            '?' => lev += 1,
+                            ';' if lev == 0 => break,
+                            ';' => lev -= 1,
+                            _ => (),
+                        }
+                    }
+                }
+            }
+            ';' => (),
+            // push integer constant
+            '{' => {
+                let ic = cap.try_number()?;
+                if ic.is_some() && cap.read_char()? == '}' {
+                    stack.push(Int(ic.unwrap() as i32));
+                } else {
+                    return Err(stx_error("invalid int constant"));
+                }
+            }
+            // push char constant
+            '\'' => {
+                stack.push(Int(cap.read_char()? as i32));
+                if cap.read_char()? != '\'' {
+                    return Err(stx_error("invalid char constant"));
+                }
+            }
+            // push strlen (top of stack)
+            'l' => {
+                let str = stack.pop_str()?;
+                stack.push(Int(str.len() as i32));
+            }
+            // unary operators
+            '!' => {
+                let v1 = stack.pop_int()?;
+                stack.push(Int(if v1 == 0 { 1 } else { 0 }));
+            }
+            '~' => {
+                let v1 = stack.pop_int()?;
+                stack.push(Int(!v1));
+            }
+            // logical operators
+            op @ '=' | op @ '<' | op @ '>' | op @ 'A' | op @ 'O' => {
+                let (v2, v1) = (stack.pop_int()?, stack.pop_int()?);
+                let res = match op {
+                    '=' => v1 == v2,
+                    '<' => v1 < v2,
+                    '>' => v1 > v2,
+                    'A' => v1 != 0 && v2 != 0,
+                    'O' => v1 != 0 || v2 != 0,
+                    _ => unreachable!(),
+                };
+                stack.push(Int(if res { 1 } else { 0 }));
+            }
+            // arithmetic operators
+            op @ '+' | op @ '-' | op @ '*' | op @ '/' | op @ 'm' => {
+                let (v2, v1) = (stack.pop_int()?, stack.pop_int()?);
+                let res = match op {
+                    '+' => v1 + v2,
+                    '-' => v1 - v2,
+                    '*' => v1 * v2,
+                    '/' => v1 / v2,
+                    'm' => v1 % v2,
+                    _ => unreachable!(),
+                };
+                stack.push(Int(res));
+            }
+            // bitwise operators
+            op @ '&' | op @ '|' | op @ '^' => {
+                let (v2, v1) = (stack.pop_int()?, stack.pop_int()?);
+                let res = match op {
+                    '&' => v1 & v2,
+                    '|' => v1 | v2,
+                    '^' => v1 ^ v2,
+                    _ => unreachable!(),
+                };
+                stack.push(Int(res));
+            }
+            // output literal %
+            '%' => {
+                output.push('%' as u8);
+            }
+            // set/get variables
+            'P' => {
+                vars.set(cap.read_char()?, stack.pop()?)?;
+            }
+            'g' => {
+                stack.push(vars.get(cap.read_char()?)?);
+            }
+            _ => return Err(stx_error("unknown command")),
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct CapError {
+    inner: CapErrorImpl,
+}
+
+fn stx_error(msg: &str) -> CapError {
+    CapError { inner: CapErrorImpl::Stx(msg.to_owned()) }
+}
+
+fn var_error(c: char) -> CapError {
+    CapError { inner: CapErrorImpl::Var(c) }
+}
+
+#[derive(Debug)]
+enum CapErrorImpl {
+    Stx(String),
+    Var(char),
+}
+
+impl fmt::Display for CapError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::CapErrorImpl::*;
+        match self.inner {
+            Stx(ref msg) => write!(f, "{}", msg),
+            Var(ref name) => write!(f, "variable {} not set", name),
+        }
+    }
+}
+
+impl error::Error for CapError {
+    fn description(&self) -> &str {
+        use self::CapErrorImpl::*;
+        match self.inner {
+            Stx(..) => "capability syntax error",
+            Var(..) => "capability variable error",
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+
 #[derive(Debug)]
 pub struct DescError {
     inner: DescErrorImpl,
@@ -172,12 +705,8 @@ impl fmt::Display for DescError {
         match self.inner {
             Io(ref err) => err.fmt(f),
             Parse(ref msg) => write!(f, "{}", msg),
-            Absent(ref name) => {
-                write!(f, "no description found for {}", name)
-            }
-            Name(ref name) => {
-                write!(f, "invalid terminal name '{}'", name)
-            }
+            Absent(ref name) => write!(f, "no description found for {}", name),
+            Name(ref name) => write!(f, "invalid terminal name '{}'", name),
         }
     }
 }

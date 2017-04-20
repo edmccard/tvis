@@ -1,53 +1,5 @@
-#![allow(non_upper_case_globals)]
+use super::{Boolean, Number, String};
 
-// Naming differences:
-// in -> in_
-// if => if_
-// boolean OTbs => OTbs_b
-// string OTbs => OTbs_s
-
-
-pub struct Boolean(usize);
-pub struct Number(usize);
-pub struct String(usize);
-
-pub trait Capability<T> {
-    type Output;
-    fn capability(&self, cpb: T) -> Self::Output;
-}
-
-impl Capability<Boolean> for super::Desc {
-    type Output = bool;
-    fn capability(&self, cpb: Boolean) -> bool {
-        if self.bools.len() > cpb.0 {
-            self.bools[cpb.0]
-        } else {
-            false
-        }
-    }
-}
-
-impl Capability<Number> for super::Desc {
-    type Output = u16;
-    fn capability(&self, cpb: Number) -> u16 {
-        if self.nums.len() > cpb.0 {
-            self.nums[cpb.0]
-        } else {
-            0xffff
-        }
-    }
-}
-
-impl<'a> Capability<String> for &'a super::Desc {
-    type Output = &'a [u8];
-    fn capability(&self, cpb: String) -> &'a [u8] {
-        if self.strings.len() > cpb.0 {
-            &self.strings[cpb.0]
-        } else {
-            Default::default()
-        }
-    }
-}
 
 pub const bw: Boolean = Boolean(0);
 pub const am: Boolean = Boolean(1);

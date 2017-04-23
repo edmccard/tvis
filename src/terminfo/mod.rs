@@ -21,9 +21,6 @@ pub struct Desc {
     bools: Vec<bool>,
     nums: Vec<u16>,
     strings: Vec<Vec<u8>>,
-    def_str: Vec<u8>,
-    def_num: u16,
-    def_bool: bool,
 }
 
 impl Desc {
@@ -139,9 +136,6 @@ impl Desc {
                 bools: bools,
                 nums: nums,
                 strings: strings,
-                def_str: Vec::new(),
-                def_num: 0xffff,
-                def_bool: false,
             },
         )
     }
@@ -197,13 +191,12 @@ impl Desc {
             bools: bools,
             nums: nums,
             strings: strings,
-            def_str: Vec::new(),
-            def_num: 0xffff,
-            def_bool: false,
         }
     }
 }
 
+
+static DEF_BOOL: bool = false;
 
 impl Index<cap::Boolean> for Desc {
     type Output = bool;
@@ -212,10 +205,12 @@ impl Index<cap::Boolean> for Desc {
         if self.bools.len() > idx {
             &self.bools[idx]
         } else {
-            &self.def_bool
+            &DEF_BOOL
         }
     }
 }
+
+static DEF_NUM: u16 = 0xffff;
 
 impl Index<cap::Number> for Desc {
     type Output = u16;
@@ -224,10 +219,12 @@ impl Index<cap::Number> for Desc {
         if self.nums.len() > idx {
             &self.nums[idx]
         } else {
-            &self.def_num
+            &DEF_NUM
         }
     }
 }
+
+static DEF_STR: &'static [u8] = &[];
 
 impl Index<cap::String> for Desc {
     type Output = [u8];
@@ -236,7 +233,7 @@ impl Index<cap::String> for Desc {
         if self.strings.len() > idx {
             &self.strings[idx]
         } else {
-            &self.def_str
+            DEF_STR
         }
     }
 }

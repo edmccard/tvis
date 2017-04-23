@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::iter;
+use std::ops::Index;
 use std::path::{Path, PathBuf};
 use std::slice;
 use std::str;
@@ -20,6 +21,9 @@ pub struct Desc {
     bools: Vec<bool>,
     nums: Vec<u16>,
     strings: Vec<Vec<u8>>,
+    def_bool: bool,
+    def_num: u16,
+    def_str: Vec<u8>,
 }
 
 impl Desc {
@@ -135,6 +139,9 @@ impl Desc {
                 bools: bools,
                 nums: nums,
                 strings: strings,
+                def_bool: false,
+                def_num: 0xffff,
+                def_str: Vec::new(),
             },
         )
     }
@@ -190,9 +197,50 @@ impl Desc {
             bools: bools,
             nums: nums,
             strings: strings,
+            def_bool: false,
+            def_num: 0xffff,
+            def_str: Vec::new(),
         }
     }
 }
+
+
+impl Index<cap::Boolean> for Desc {
+    type Output = bool;
+    fn index(&self, index: cap::Boolean) -> &bool {
+        let idx = usize::from(&index);
+        if self.bools.len() > idx {
+            &self.bools[idx]
+        } else {
+            &self.def_bool
+        }
+    }
+}
+
+impl Index<cap::Number> for Desc {
+    type Output = u16;
+    fn index(&self, index: cap::Number) -> &u16 {
+        let idx = usize::from(&index);
+        if self.nums.len() > idx {
+            &self.nums[idx]
+        } else {
+            &self.def_num
+        }
+    }
+}
+
+impl Index<cap::String> for Desc {
+    type Output = [u8];
+    fn index(&self, index: cap::String) -> &[u8] {
+        let idx = usize::from(&index);
+        if self.strings.len() > idx {
+            &self.strings[idx]
+        } else {
+            &self.def_str
+        }
+    }
+}
+
 
 #[macro_export]
 macro_rules! desc {
@@ -893,11 +941,11 @@ mod tests {
             cols => 80,
             bel => &[7u8][..]
         ];
-        assert_eq!(desc.capability(bw), false);
-        assert_eq!(desc.capability(am), true);
-        assert_eq!(desc.capability(xsb), false);
-        assert_eq!(desc.capability(cols), 80);
-        assert_eq!(desc.capability(bel), &[7u8]);
+        assert_eq!(desc[bw], false);
+        assert_eq!(desc[am], true);
+        assert_eq!(desc[xsb], false);
+        assert_eq!(desc[cols], 80);
+        assert_eq!(desc[bel], [7u8]);
     }
 
     #[test]

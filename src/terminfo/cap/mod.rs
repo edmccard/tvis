@@ -544,55 +544,6 @@ pub struct Number(usize);
 /// `box_chars_1`              | `box1`
 pub struct String(usize);
 
-/// See the implementations for [`Desc`](../struct.Desc.html).
-pub trait Capability<'a, T> {
-    #[doc(hidden)]
-    type Output;
-    fn capability(&'a self, cpb: T) -> Self::Output;
-}
-
-impl<'a> Capability<'a, Boolean> for super::Desc {
-    #[doc(hidden)]
-    type Output = bool;
-
-    /// Returns the boolean capability named by `cap`.
-    fn capability(&'a self, cap: Boolean) -> bool {
-        if self.bools.len() > cap.0 {
-            self.bools[cap.0]
-        } else {
-            false
-        }
-    }
-}
-
-impl<'a> Capability<'a, Number> for super::Desc {
-    #[doc(hidden)]
-    type Output = u16;
-
-    /// Returns the numeric capability named by `cap`.
-    fn capability(&'a self, cpb: Number) -> u16 {
-        if self.nums.len() > cpb.0 {
-            self.nums[cpb.0]
-        } else {
-            0xffff
-        }
-    }
-}
-
-impl<'a> Capability<'a, String> for super::Desc {
-    #[doc(hidden)]
-    type Output = &'a [u8];
-
-    /// Returns the string capability named by `cap`.
-    fn capability(&'a self, cpb: String) -> &'a [u8] {
-        if self.strings.len() > cpb.0 {
-            &self.strings[cpb.0]
-        } else {
-            Default::default()
-        }
-    }
-}
-
 
 // Only public for use in the `desc!` macro.
 

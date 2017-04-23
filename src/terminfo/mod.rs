@@ -21,9 +21,9 @@ pub struct Desc {
     bools: Vec<bool>,
     nums: Vec<u16>,
     strings: Vec<Vec<u8>>,
-    def_bool: bool,
-    def_num: u16,
     def_str: Vec<u8>,
+    def_num: u16,
+    def_bool: bool,
 }
 
 impl Desc {
@@ -139,9 +139,9 @@ impl Desc {
                 bools: bools,
                 nums: nums,
                 strings: strings,
-                def_bool: false,
-                def_num: 0xffff,
                 def_str: Vec::new(),
+                def_num: 0xffff,
+                def_bool: false,
             },
         )
     }
@@ -197,9 +197,9 @@ impl Desc {
             bools: bools,
             nums: nums,
             strings: strings,
-            def_bool: false,
-            def_num: 0xffff,
             def_str: Vec::new(),
+            def_num: 0xffff,
+            def_bool: false,
         }
     }
 }
@@ -936,7 +936,7 @@ mod tests {
     fn desc_literal() {
         use super::cap::*;
         let desc = desc![
-            "phony", "80-column dumb tty",
+            "dumb", "80-column dumb tty",
             am => true,
             cols => 80,
             bel => &[7u8][..]
@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(desc[am], true);
         assert_eq!(desc[xsb], false);
         assert_eq!(desc[cols], 80);
-        assert_eq!(desc[bel], [7u8]);
+        assert_eq!(&desc[bel], &[7u8]);
     }
 
     #[test]

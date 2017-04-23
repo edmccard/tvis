@@ -592,3 +592,58 @@ impl<'a> Capability<'a, String> for super::Desc {
         }
     }
 }
+
+
+// Only public for use in the `desc!` macro.
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub enum Data {
+    Bool(bool),
+    Num(u16),
+    Str(Vec<u8>),
+}
+
+pub type DPair = (usize, Data);
+
+#[doc(hidden)]
+impl Boolean {
+    pub fn data(&self, val: bool) -> DPair {
+        (usize::from(self), Data::Bool(val))
+    }
+}
+
+#[doc(hidden)]
+impl Number {
+    pub fn data(&self, val: u16) -> DPair {
+        (usize::from(self), Data::Num(val))
+    }
+}
+
+#[doc(hidden)]
+impl String {
+    pub fn data<T: Into<Vec<u8>>>(&self, val: T) -> DPair {
+        (usize::from(self), Data::Str(val.into()))
+    }
+}
+
+#[doc(hidden)]
+impl<'a> From<&'a Boolean> for usize {
+    fn from(val: &'a Boolean) -> usize {
+        val.0
+    }
+}
+
+#[doc(hidden)]
+impl<'a> From<&'a Number> for usize {
+    fn from(val: &'a Number) -> usize {
+        val.0
+    }
+}
+
+#[doc(hidden)]
+impl<'a> From<&'a String> for usize {
+    fn from(val: &'a String) -> usize {
+        val.0
+    }
+}

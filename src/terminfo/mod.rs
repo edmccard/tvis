@@ -142,6 +142,93 @@ impl Desc {
     pub fn names(&self) -> slice::Iter<String> {
         self.names.iter()
     }
+
+    // Only public for use in `desc!` macro.
+    #[doc(hidden)]
+    pub fn new(names: &[String], pairs: &[cap::DPair]) -> Desc {
+        use self::cap::Data::*;
+
+        let mut bools: Vec<bool> = vec![false; cap::NUM_BOOLS];
+        let mut nums: Vec<u16> = vec![0xffff; cap::NUM_INTS];
+        let mut strings: Vec<Vec<u8>> = vec![Vec::new(); cap::NUM_STRINGS];
+        let mut maxb: usize = 0;
+        let mut maxn: usize = 0;
+        let mut maxs: usize = 0;
+
+        for pair in pairs {
+            match *pair {
+                (i, Bool(v)) if v => {
+                    if i >= maxb {
+                        maxb = i + 1;
+                    }
+                    bools[i] = v;
+                }
+                (i, Num(v)) if v != 0xffff => {
+                    if i >= maxn {
+                        maxn = i + 1;
+                    }
+                    nums[i] = v;
+                }
+                (i, Str(ref v)) if v.len() > 0 => {
+                    if i >= maxs {
+                        maxs = i + 1;
+                    }
+                    strings[i] = v.clone();
+                }
+                _ => (),
+            }
+        }
+        bools.truncate(maxb);
+        bools.shrink_to_fit();
+        nums.truncate(maxn);
+        nums.shrink_to_fit();
+        strings.truncate(maxs);
+        strings.shrink_to_fit();
+
+        Desc {
+            names: Vec::from(names),
+            bools: bools,
+            nums: nums,
+            strings: strings,
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! desc {
+    // Finish processing.
+    (@acc [$($ns:expr),*] [$($ps:expr),*]) => {
+        Desc::new(
+            &[$(::std::string::String::from($ns)),*][..],
+            &[$($ps),*][..]
+        );
+    };
+
+    // Add a name.
+    (@acc [$($ns:expr),*] [$($ps:expr),*] $n:expr) => {
+        desc!(@acc [$($ns,)* $n] [$($ps),*]);
+    };
+    (@acc [$($ns:expr),*] [$($ps:expr),*] $n:expr, $($xs:tt)*) => {
+        desc!(@acc [$($ns,)* $n] [$($ps),*] $($xs)*);
+    };
+
+    // Add a cap => val pair.
+    (@acc [$($ns:expr),*] [$($ps:expr),*] $k:expr => $v:expr) => {
+        desc!(@acc [$($ns),*] [$($ps,)* $k.data($v)]);
+    };
+    (@acc [$($ns:expr),*] [$($ps:expr),*] $k:expr => $v:expr, $($xs:tt)*) => {
+        desc!(@acc [$($ns),*] [$($ps,)* $k.data($v)] $($xs)*);
+    };
+
+    // Start, with a name.
+    ($n:expr) => { desc!(@acc [$n] []); };
+    ($n:expr, $($xs:tt)*) => { desc!(@acc [$n] [] $($xs)*); };
+
+    // Start, with a cap => val pair.
+    ($k:expr => $v:expr) => { desc!(@acc [] [$k.data($v)]); };
+    ($k:expr => $v:expr, $($xs:tt)*) => {
+        desc!(@acc [] [$k.data($v)] $($xs)*);
+    };
 }
 
 
@@ -220,7 +307,6 @@ impl Params {
         Params(params)
     }
 
-    // TODO: is accessing unspecified param an error?
     fn get(&self, idx: usize) -> Result<Param, CapError> {
         if idx < 1 || idx > 9 {
             return Err(stx_error("param index must be 1-9"));
@@ -797,6 +883,22 @@ fn read_words(r: &mut Read, n: usize) -> io::Result<Vec<u16>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn desc_literal() {
+        use super::cap::*;
+        let desc = desc![
+            "phony", "80-column dumb tty",
+            am => true,
+            cols => 80,
+            bel => &[7u8][..]
+        ];
+        assert_eq!(desc.capability(bw), false);
+        assert_eq!(desc.capability(am), true);
+        assert_eq!(desc.capability(xsb), false);
+        assert_eq!(desc.capability(cols), 80);
+        assert_eq!(desc.capability(bel), &[7u8]);
+    }
 
     #[test]
     fn tparm_basic_setabf() {

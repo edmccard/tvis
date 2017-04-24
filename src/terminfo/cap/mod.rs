@@ -2,8 +2,7 @@
 
 //! Terminfo capability names.
 //!
-//! The names are used as parameters for `Desc::capability` (see
-//! [`Desc`](../struct.Desc.html)).
+//! The names are used as indices into a [`Desc`](../struct.Desc.html).
 //!
 //! [`Boolean`](struct.Boolean.html), [`Number`](struct.Number.html), and
 //! [`String`](struct.String.html) contain the complete list of names
@@ -22,8 +21,7 @@ pub use self::names::*;
 
 /// Boolean capability names.
 ///
-/// The names are used as parameters for `Desc::capability` (see
-/// [`Desc`](../struct.Desc.html)).
+/// The names are used as indices into a [`Desc`](../struct.Desc.html).
 ///
 /// Name                      | Short name
 /// --------------------------|-----------
@@ -71,12 +69,12 @@ pub use self::names::*;
 /// `linefeed_is_newline`     | `OTNL`
 /// `has_hardware_tabs`       | `OTpt`
 /// `return_does_clr_eol`     | `OTxr`
+#[derive(Clone, Copy, Debug)]
 pub struct Boolean(usize);
 
 /// Numeric capability names.
 ///
-/// The names are used as parameters for `Desc::capability` (see
-/// [`Desc`](../struct.Desc.html)).
+/// The names are used as indices into a [`Desc`](../struct.Desc.html).
 ///
 /// Name                     | Short name
 /// -------------------------|-----------
@@ -119,12 +117,12 @@ pub struct Boolean(usize);
 /// `backspace_delay`        | `OTdB`
 /// `horizontal_tab_delay`   | `OTdT`
 /// `number_of_function_keys`| `OTkn`
+#[derive(Clone, Copy, Debug)]
 pub struct Number(usize);
 
 /// String capability names.
 ///
-/// The names are used as parameters for `Desc::capability` (see
-/// [`Desc`](../struct.Desc.html)).
+/// The names are used as indices into a [`Desc`](../struct.Desc.html).
 ///
 /// Name                       | Short name
 /// ---------------------------|-----------
@@ -542,6 +540,7 @@ pub struct Number(usize);
 /// `memory_lock`              | `meml`
 /// `memory_unlock`            | `memu`
 /// `box_chars_1`              | `box1`
+#[derive(Clone, Copy, Debug)]
 pub struct String(usize);
 
 
@@ -555,46 +554,47 @@ pub enum Data {
     Str(Vec<u8>),
 }
 
+#[doc(hidden)]
 pub type DPair = (usize, Data);
 
 #[doc(hidden)]
 impl Boolean {
     pub fn data(&self, val: bool) -> DPair {
-        (usize::from(self), Data::Bool(val))
+        (usize::from(*self), Data::Bool(val))
     }
 }
 
 #[doc(hidden)]
 impl Number {
     pub fn data(&self, val: u16) -> DPair {
-        (usize::from(self), Data::Num(val))
+        (usize::from(*self), Data::Num(val))
     }
 }
 
 #[doc(hidden)]
 impl String {
     pub fn data<T: Into<Vec<u8>>>(&self, val: T) -> DPair {
-        (usize::from(self), Data::Str(val.into()))
+        (usize::from(*self), Data::Str(val.into()))
     }
 }
 
 #[doc(hidden)]
-impl<'a> From<&'a Boolean> for usize {
-    fn from(val: &'a Boolean) -> usize {
+impl From<Boolean> for usize {
+    fn from(val: Boolean) -> usize {
         val.0
     }
 }
 
 #[doc(hidden)]
-impl<'a> From<&'a Number> for usize {
-    fn from(val: &'a Number) -> usize {
+impl From<Number> for usize {
+    fn from(val: Number) -> usize {
         val.0
     }
 }
 
 #[doc(hidden)]
-impl<'a> From<&'a String> for usize {
-    fn from(val: &'a String) -> usize {
+impl From<String> for usize {
+    fn from(val: String) -> usize {
         val.0
     }
 }

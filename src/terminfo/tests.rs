@@ -9,10 +9,10 @@ fn desc_literal() {
             "dumb", "80-column dumb tty",
             am => true,
             cols => 80,
-            bel => "\x07",
-            cr => "\r",
-            cud1 => "\n",
-            ind => "\n",
+            bel => b"\x07",
+            cr => b"\r",
+            cud1 => b"\n",
+            ind => b"\n",
         ];
     assert_eq!(desc[bw], false);
     assert_eq!(desc[am], true);

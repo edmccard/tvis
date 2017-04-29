@@ -1,6 +1,7 @@
 #![cfg(windows)]
 #![allow(dead_code)]
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 extern "system" {
     pub fn AllocConsole() -> Bool;
     pub fn AttachConsole(process_id: u32) -> Bool;
@@ -266,8 +267,8 @@ extern "system" {
 
 pub enum Void {}
 
-pub type HandlerRoutine =
-    Option<unsafe extern "system" fn(ctrl_type: u32) -> Bool>;
+pub type HandlerRoutine = Option<unsafe extern "system" fn(ctrl_type: u32)
+                                                           -> Bool>;
 
 #[repr(C)]
 #[derive(Copy, Clone)]

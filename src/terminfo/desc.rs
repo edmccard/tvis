@@ -18,7 +18,12 @@ use super::cap;
 /// `desc[bw]` returns a `bool`, `desc[cols]` returns a `u16`, and
 /// `&desc[setaf]` returns a `&[u8]`.
 ///
+/// The [`desc!` macro](../macro.desc.html) provides syntax for `Desc`
+/// literals.
+///
 /// # Examples
+///
+/// Look up the `rs1` capability for xterm-256color:
 ///
 /// ```ignore
 /// # use tvis::terminfo::DescError;
@@ -32,9 +37,6 @@ use super::cap;
 /// # Ok(())
 /// # }
 /// ```
-///
-/// The [`desc!` macro](../macro.desc.html) provides syntax for `Desc`
-/// literals.
 pub struct Desc {
     names: Vec<String>,
     bools: Vec<bool>,
@@ -46,9 +48,9 @@ impl Desc {
     /// Finds and opens the compiled terminfo description for the
     /// terminal named by `term_name`.
     ///
-    /// This assumes that the local terminfo database uses
-    /// the "directory tree" format for storing compiled descriptions,
-    /// and it searches in these directories:
+    /// This assumes that the local terminfo database uses a directory
+    /// tree format for storing compiled descriptions, and it searches
+    /// in these directories:
     ///
     /// 1. The directory named by the `TERMINFO` environment variable.
     /// 2. `$HOME/.terminfo`
@@ -300,7 +302,9 @@ impl Index<cap::String> for Desc {
 
 /// A syntax for [`terminfo::Desc`](terminfo/struct.Desc.html) literals.
 ///
-/// # Example
+/// # Examples
+///
+/// A description for a "dumb terminal":
 ///
 /// ```
 /// #[macro_use]
@@ -319,13 +323,12 @@ impl Index<cap::String> for Desc {
 /// ];
 /// # }
 /// ```
-///
 /// Terminal names are specified by strings; capabilities are
 /// specified by `name => val` pairs, where `name` is a
 /// [`Boolean`](../terminfo/cap/struct.Boolean.html),
 /// [`Number`](../terminfo/cap/struct.Number.html), or
 /// [`String`](../terminfo/cap/struct.String.html) capability name,
-/// and `val` is a `bool`, `u16`, or `Into<Vec<u8>>` respectively.
+/// and `val` is a `bool`, `u16`, or `AsRef<[u8]>` respectively.
 #[macro_export]
 macro_rules! desc {
     // Finish processing.

@@ -5,6 +5,8 @@ use std::time::Duration;
 
 
 /// A parameter for [`tparm`](fn.tparm.html).
+///
+/// See also [the `params!` macro](../macros.params.html).
 #[derive(Clone, Debug)]
 pub enum Param {
     Absent,
@@ -12,57 +14,51 @@ pub enum Param {
     Str(Vec<u8>),
 }
 
-impl From<i8> for Param {
-    fn from(int: i8) -> Param {
-        Param::Int(int as i32)
+// ToParamFromStr and ToParamFromInt are only public for use in the
+// `params!` macro.
+#[doc(hidden)]
+pub trait ToParamFromStr {
+    fn to_param(&self) -> Param;
+}
+
+#[doc(hidden)]
+pub trait ToParamFromInt {
+    fn to_param(self) -> Param;
+}
+
+impl<T> ToParamFromStr for T where T: AsRef<[u8]> {
+    fn to_param(&self) -> Param {
+        Param::Str(self.as_ref().into())
     }
 }
 
-impl From<u8> for Param {
-    fn from(int: u8) -> Param {
-        Param::Int(int as i32)
+impl ToParamFromInt for i8 {
+    fn to_param(self) -> Param {
+        Param::Int(self as i32)
     }
 }
 
-impl From<i16> for Param {
-    fn from(int: i16) -> Param {
-        Param::Int(int as i32)
+impl ToParamFromInt for u8 {
+    fn to_param(self) -> Param {
+        Param::Int(self as i32)
     }
 }
 
-impl From<u16> for Param {
-    fn from(int: u16) -> Param {
-        Param::Int(int as i32)
+impl ToParamFromInt for i16 {
+    fn to_param(self) -> Param {
+        Param::Int(self as i32)
     }
 }
 
-impl From<i32> for Param {
-    fn from(int: i32) -> Param {
-        Param::Int(int)
+impl ToParamFromInt for u16 {
+    fn to_param(self) -> Param {
+        Param::Int(self as i32)
     }
 }
 
-impl<'a> From<&'a str> for Param {
-    fn from(str: &'a str) -> Param {
-        Param::Str(str.into())
-    }
-}
-
-impl From<String> for Param {
-    fn from(str: String) -> Param {
-        Param::Str(str.into())
-    }
-}
-
-impl<'a> From<&'a [u8]> for Param {
-    fn from(str: &'a [u8]) -> Param {
-        Param::Str(str.into())
-    }
-}
-
-impl From<Vec<u8>> for Param {
-    fn from(str: Vec<u8>) -> Param {
-        Param::Str(str)
+impl ToParamFromInt for i32 {
+    fn to_param(self) -> Param {
+        Param::Int(self as i32)
     }
 }
 
@@ -96,9 +92,14 @@ impl<'a> Params<'a> {
     }
 }
 
+/// Parameter lists for
+/// [`terminfo::tparm`](terminfo/fn.tparm.html).
 #[macro_export]
 macro_rules! params {
-    ($($p:expr),* $(,)*) => { [$($p.into()),*] }
+    ($($p:expr),* $(,)*) => {{
+        use $crate::terminfo::{ToParamFromInt, ToParamFromStr};
+        [$($p.to_param()),*]
+    }}
 }
 
 
@@ -573,7 +574,7 @@ pub fn tputs(
     input: &[u8],
     pad_factor: u32,
     baud: usize,
-    pad_char: Option<u8>
+    pad_char: Option<u8>,
 ) -> Result<(), CapError> {
     use self::PadState::*;
     use self::NumPart::*;

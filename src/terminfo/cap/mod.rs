@@ -544,8 +544,7 @@ pub struct Number(usize);
 pub struct String(usize);
 
 
-// Only public for use in the `desc!` macro.
-
+// Data and Dpair are only public for use in the `desc!` macro.
 #[doc(hidden)]
 #[derive(Debug)]
 pub enum Data {
@@ -573,8 +572,8 @@ impl Number {
 
 #[doc(hidden)]
 impl String {
-    pub fn data<T: Into<Vec<u8>>>(&self, val: T) -> DPair {
-        (usize::from(*self), Data::Str(val.into()))
+    pub fn data<T: AsRef<[u8]>>(&self, val: T) -> DPair {
+        (usize::from(*self), Data::Str(val.as_ref().into()))
     }
 }
 

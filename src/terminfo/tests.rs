@@ -119,6 +119,9 @@ fn tparm_vars() {
 
     let _ = tparm(&mut output, cap, &mut params!(0), &mut vars);
     assert_eq!(output, b"\\E[?1000l\\E[?1003l\\E[?1006l");
+
+    let _ = tparm(&mut output, b"%gz%d", &mut params!(), &mut vars);
+    assert_eq!(output, b"0");
 }
 
 #[test]

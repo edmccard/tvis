@@ -3,7 +3,6 @@ use std::io::Write;
 use std::thread::sleep;
 use std::time::Duration;
 
-
 /// A parameter for [`tparm`](fn.tparm.html).
 ///
 /// See also [the `params!` macro](../macros.params.html).
@@ -97,6 +96,7 @@ impl<'a> Params<'a> {
 #[macro_export]
 macro_rules! params {
     ($($p:expr),* $(,)*) => {{
+        #[allow(unused_imports)]
         use $crate::terminfo::{ToParamFromInt, ToParamFromStr};
         [$($p.to_param()),*]
     }}
@@ -115,7 +115,7 @@ impl Vars {
     fn set(&mut self, name: char, param: Param) -> Result<(), CapError> {
         let idx = self.idx(name)?;
         if self.0.is_empty() {
-            self.0 = vec![Param::Absent; 52];
+            self.0 = vec![Param::Int(0); 52];
         }
         self.0[idx] = param;
         Ok(())

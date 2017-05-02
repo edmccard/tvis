@@ -1007,4 +1007,4 @@ pub const memory_lock: String = String(411);
 pub const memory_unlock: String = String(412);
 pub const box_chars_1: String = String(413);
 
-pub const NUM_STRINGS: usize = 414; // restricted?
+pub const NUM_STRS: usize = 414; // restricted?

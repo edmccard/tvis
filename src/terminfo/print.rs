@@ -13,54 +13,6 @@ pub enum Param {
     Str(Vec<u8>),
 }
 
-// ToParamFromStr and ToParamFromInt are only public for use in the
-// `params!` macro.
-#[doc(hidden)]
-pub trait ToParamFromStr {
-    fn to_param(&self) -> Param;
-}
-
-#[doc(hidden)]
-pub trait ToParamFromInt {
-    fn to_param(self) -> Param;
-}
-
-impl<T> ToParamFromStr for T where T: AsRef<[u8]> {
-    fn to_param(&self) -> Param {
-        Param::Str(self.as_ref().into())
-    }
-}
-
-impl ToParamFromInt for i8 {
-    fn to_param(self) -> Param {
-        Param::Int(self as i32)
-    }
-}
-
-impl ToParamFromInt for u8 {
-    fn to_param(self) -> Param {
-        Param::Int(self as i32)
-    }
-}
-
-impl ToParamFromInt for i16 {
-    fn to_param(self) -> Param {
-        Param::Int(self as i32)
-    }
-}
-
-impl ToParamFromInt for u16 {
-    fn to_param(self) -> Param {
-        Param::Int(self as i32)
-    }
-}
-
-impl ToParamFromInt for i32 {
-    fn to_param(self) -> Param {
-        Param::Int(self as i32)
-    }
-}
-
 #[derive(Debug)]
 struct Params<'a>(&'a mut [Param]);
 
@@ -100,6 +52,36 @@ macro_rules! params {
         use $crate::terminfo::{ToParamFromInt, ToParamFromStr};
         [$($p.to_param()),*]
     }}
+}
+
+// ToParamFromStr and ToParamFromInt are only public for use in the
+// `params!` macro.
+#[doc(hidden)]
+pub trait ToParamFromStr {
+    fn to_param(&self) -> Param;
+}
+
+#[doc(hidden)]
+pub trait ToParamFromInt {
+    fn to_param(self) -> Param;
+}
+
+impl<T> ToParamFromStr for T
+where
+    T: AsRef<[u8]>,
+{
+    fn to_param(&self) -> Param {
+        Param::Str(self.as_ref().into())
+    }
+}
+
+impl<T> ToParamFromInt for T
+where
+    T: Into<i32>,
+{
+    fn to_param(self) -> Param {
+        Param::Int(self.into())
+    }
 }
 
 
@@ -636,13 +618,13 @@ pub fn tputs(
                 }
                 if let Some(&b'>') = input.get(idx) {
                     if part == Frac {
-                        ms = ms / 10;
+                        ms /= 10;
                     }
                     match pad_char {
                         Some(c) => {
                             let amt = ((baud / 8) * (ms as usize)) / 1000;
                             for _ in 0..amt {
-                                output.write(&[c])?;
+                                output.write_all(&[c])?;
                             }
                         }
                         None => {

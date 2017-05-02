@@ -15,6 +15,10 @@
 //! - `OTbs_b` replaces boolean `OTbs`
 //! - `OTbs_s` replaces string `OTbs`
 
+use std::borrow::Borrow;
+use std::ops::Index;
+use std::string::String as StdString;
+
 mod names;
 #[doc(hidden)]
 pub use self::names::*;
@@ -544,56 +548,107 @@ pub struct Number(usize);
 pub struct String(usize);
 
 
-// Data and Dpair are only public for use in the `desc!` macro.
+#[derive(Debug)]
+pub enum VarCap {
+    Bool(StdString, bool),
+    Num(StdString, u16),
+    Str(StdString, Vec<u8>),
+}
+
+
+static DEF_BOOL: bool = false;
+
+impl Index<Boolean> for super::Desc {
+    #[doc(hidden)]
+    type Output = bool;
+
+    /// The value of the boolean capability named by `index`.
+    fn index(&self, idx: Boolean) -> &bool {
+        if self.bools.len() > idx.0 {
+            &self.bools[idx.0]
+        } else {
+            &DEF_BOOL
+        }
+    }
+}
+
+static DEF_NUM: u16 = 0xffff;
+
+impl Index<Number> for super::Desc {
+    #[doc(hidden)]
+    type Output = u16;
+
+    /// The value of the numeric capability named by `index`.
+    fn index(&self, idx: Number) -> &u16 {
+        if self.nums.len() > idx.0 {
+            &self.nums[idx.0]
+        } else {
+            &DEF_NUM
+        }
+    }
+}
+
+static DEF_STR: &[u8] = &[];
+
+impl Index<String> for super::Desc {
+    #[doc(hidden)]
+    type Output = [u8];
+
+    /// The value of the string capability named by `index`.
+    fn index(&self, idx: String) -> &[u8] {
+        if self.strings.len() > idx.0 {
+            &self.strings[idx.0]
+        } else {
+            DEF_STR
+        }
+    }
+}
+
+
+// The following are only public for use in the `desc!` macro.
+
 #[doc(hidden)]
 #[derive(Debug)]
-pub enum Data {
-    Bool(bool),
-    Num(u16),
-    Str(Vec<u8>),
-}
+pub struct DPair(pub usize, pub VarCap);
 
-#[doc(hidden)]
-pub type DPair = (usize, Data);
-
-#[doc(hidden)]
-impl Boolean {
-    pub fn data(&self, val: bool) -> DPair {
-        (usize::from(*self), Data::Bool(val))
+impl From<(Boolean, bool)> for DPair {
+    fn from(val: (Boolean, bool)) -> DPair {
+        DPair((val.0).0, VarCap::Bool(StdString::new(), val.1))
     }
 }
 
-#[doc(hidden)]
-impl Number {
-    pub fn data(&self, val: u16) -> DPair {
-        (usize::from(*self), Data::Num(val))
+impl From<(Number, u16)> for DPair {
+    fn from(val: (Number, u16)) -> DPair {
+        DPair((val.0).0, VarCap::Num(StdString::new(), val.1))
     }
 }
 
-#[doc(hidden)]
-impl String {
-    pub fn data<T: AsRef<[u8]>>(&self, val: T) -> DPair {
-        (usize::from(*self), Data::Str(val.as_ref().into()))
+impl<V> From<(String, V)> for DPair
+where
+    V: AsRef<[u8]>,
+{
+    fn from(val: (String, V)) -> DPair {
+        DPair(
+            (val.0).0,
+            VarCap::Str(StdString::new(), (val.1).as_ref().into()),
+        )
     }
 }
 
-#[doc(hidden)]
-impl From<Boolean> for usize {
-    fn from(val: Boolean) -> usize {
-        val.0
+impl<K: Borrow<str>> From<(K, bool)> for DPair {
+    fn from(val: (K, bool)) -> DPair {
+        DPair(NUM_BOOLS, VarCap::Bool((val.0).borrow().into(), val.1))
     }
 }
 
-#[doc(hidden)]
-impl From<Number> for usize {
-    fn from(val: Number) -> usize {
-        val.0
+impl<K: Borrow<str>> From<(K, u16)> for DPair {
+    fn from(val: (K, u16)) -> DPair {
+        DPair(NUM_INTS, VarCap::Num((val.0).borrow().into(), val.1))
     }
 }
 
-#[doc(hidden)]
-impl From<String> for usize {
-    fn from(val: String) -> usize {
-        val.0
+impl<K: Borrow<str>> From<(K, &'static str)> for DPair {
+    fn from(val: (K, &str)) -> DPair {
+        DPair(NUM_STRS, VarCap::Str((val.0).borrow().into(), (val.1).into()))
     }
 }

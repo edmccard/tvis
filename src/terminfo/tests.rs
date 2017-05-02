@@ -23,6 +23,25 @@ fn desc_literal() {
 }
 
 #[test]
+fn desc_user_literal() {
+    use super::cap::{am, cols};
+    let setb24 =
+        "\x1b[48;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm";
+    let setf24 =
+        "\x1b[38;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm";
+    let desc = desc![
+        am => true,
+        cols => 80,
+        "Tc" => true,
+        "setb24" => setb24,
+        "setf24" => setf24
+    ];
+    assert_eq!(desc[am], true);
+    assert_eq!(desc[cols], 80);
+    assert_eq!(desc.get_bool_ext("Tc"), true);
+}
+
+#[test]
 fn tparm_basic_setabf() {
     let mut output = Vec::new();
     let _ = tparm(

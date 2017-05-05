@@ -649,6 +649,9 @@ impl<K: Borrow<str>> From<(K, u16)> for DPair {
 
 impl<K: Borrow<str>> From<(K, &'static str)> for DPair {
     fn from(val: (K, &str)) -> DPair {
-        DPair(NUM_STRS, VarCap::Str((val.0).borrow().into(), (val.1).into()))
+        DPair(
+            NUM_STRS,
+            VarCap::Str((val.0).borrow().into(), (val.1).into()),
+        )
     }
 }

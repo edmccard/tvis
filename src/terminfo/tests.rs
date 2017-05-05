@@ -23,6 +23,7 @@ fn desc_literal() {
 }
 
 #[test]
+#[cfg_attr(rustfmt, rustfmt_skip)]
 fn desc_user_literal() {
     use super::cap::{am, cols};
     let setb24 =

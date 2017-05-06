@@ -549,11 +549,75 @@ pub struct String(usize);
 
 
 #[derive(Debug)]
-pub enum VarCap {
-    Bool(StdString, bool),
-    Num(StdString, u16),
-    Str(StdString, Vec<u8>),
+pub enum BoolName {
+    P(Boolean),
+    U(StdString),
 }
+
+#[derive(Debug)]
+pub enum NumName {
+    P(Number),
+    U(StdString),
+}
+
+#[derive(Debug)]
+pub enum StrName {
+    P(String),
+    U(StdString),
+}
+
+#[derive(Debug)]
+pub enum Cap {
+    Bool(BoolName, bool),
+    Num(NumName, u16),
+    Str(StrName, Vec<u8>),
+}
+
+
+// impl From<(Boolean, bool)> for DPair {
+//     fn from(val: (Boolean, bool)) -> DPair {
+//         DPair((val.0).0, VarCap::Bool(StdString::new(), val.1))
+//     }
+// }
+
+// impl From<(Number, u16)> for DPair {
+//     fn from(val: (Number, u16)) -> DPair {
+//         DPair((val.0).0, VarCap::Num(StdString::new(), val.1))
+//     }
+// }
+
+// impl<V> From<(String, V)> for DPair
+// where
+//     V: AsRef<[u8]>,
+// {
+//     fn from(val: (String, V)) -> DPair {
+//         DPair(
+//             (val.0).0,
+//             VarCap::Str(StdString::new(), (val.1).as_ref().into()),
+//         )
+//     }
+// }
+
+// impl<K: Borrow<str>> From<(K, bool)> for DPair {
+//     fn from(val: (K, bool)) -> DPair {
+//         DPair(NUM_BOOLS, VarCap::Bool((val.0).borrow().into(), val.1))
+//     }
+// }
+
+// impl<K: Borrow<str>> From<(K, u16)> for DPair {
+//     fn from(val: (K, u16)) -> DPair {
+//         DPair(NUM_INTS, VarCap::Num((val.0).borrow().into(), val.1))
+//     }
+// }
+
+// impl<K: Borrow<str>> From<(K, &'static str)> for DPair {
+//     fn from(val: (K, &str)) -> DPair {
+//         DPair(
+//             NUM_STRS,
+//             VarCap::Str((val.0).borrow().into(), (val.1).into()),
+//         )
+//     }
+// }
 
 
 static DEF_BOOL: bool = false;
@@ -601,57 +665,5 @@ impl Index<String> for super::Desc {
         } else {
             DEF_STR
         }
-    }
-}
-
-
-// The following are only public for use in the `desc!` macro.
-
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct DPair(pub usize, pub VarCap);
-
-impl From<(Boolean, bool)> for DPair {
-    fn from(val: (Boolean, bool)) -> DPair {
-        DPair((val.0).0, VarCap::Bool(StdString::new(), val.1))
-    }
-}
-
-impl From<(Number, u16)> for DPair {
-    fn from(val: (Number, u16)) -> DPair {
-        DPair((val.0).0, VarCap::Num(StdString::new(), val.1))
-    }
-}
-
-impl<V> From<(String, V)> for DPair
-where
-    V: AsRef<[u8]>,
-{
-    fn from(val: (String, V)) -> DPair {
-        DPair(
-            (val.0).0,
-            VarCap::Str(StdString::new(), (val.1).as_ref().into()),
-        )
-    }
-}
-
-impl<K: Borrow<str>> From<(K, bool)> for DPair {
-    fn from(val: (K, bool)) -> DPair {
-        DPair(NUM_BOOLS, VarCap::Bool((val.0).borrow().into(), val.1))
-    }
-}
-
-impl<K: Borrow<str>> From<(K, u16)> for DPair {
-    fn from(val: (K, u16)) -> DPair {
-        DPair(NUM_INTS, VarCap::Num((val.0).borrow().into(), val.1))
-    }
-}
-
-impl<K: Borrow<str>> From<(K, &'static str)> for DPair {
-    fn from(val: (K, &str)) -> DPair {
-        DPair(
-            NUM_STRS,
-            VarCap::Str((val.0).borrow().into(), (val.1).into()),
-        )
     }
 }

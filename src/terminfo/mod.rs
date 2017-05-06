@@ -9,7 +9,7 @@
 //! ## Platform Compatibility
 //!
 //! This requires the local terminfo database to be in a directory
-//! tree format; it will not work with a hashed database format.  In
+//! tree format; it will not work with a hashed database format. In
 //! other words, it should Just Work on Linux/OSX/Cygwin, but it might
 //! not work out of the box on BSD operating systems.
 
@@ -26,6 +26,7 @@ mod print;
 
 pub use self::print::{CapError, Param, ToParamFromInt, ToParamFromStr, Vars,
                       tparm, tputs};
+use self::cap::{Cap, BoolName, NumName, StrName};
 
 
 /// A terminal description.
@@ -60,12 +61,13 @@ pub use self::print::{CapError, Param, ToParamFromInt, ToParamFromStr, Vars,
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct Desc {
     names: Vec<String>,
     bools: Vec<bool>,
     nums: Vec<u16>,
     strings: Vec<Vec<u8>>,
-    ext: Vec<cap::VarCap>,
+    ext: Vec<Cap>,
 }
 
 impl Desc {
@@ -104,7 +106,10 @@ impl Desc {
             _ => return Err(name_error(term_name)),
         }
 
-        let first_char = term_name.chars().next().unwrap();
+        let first_char = term_name
+            .chars()
+            .next()
+            .expect("term_name is non-empty");
         let first_hex = format!("{:x}", first_char as usize);
         let first_char = first_char.to_string();
 
@@ -185,8 +190,9 @@ impl Desc {
         }
         let offsets = r.read_words(strings_num)?;
         let table = r.read_bytes(string_sz)?;
-        // Unwrapping cannot fail; see definition of read_strs.
-        let strings = Desc::read_strs(&[&offsets], &table)?.pop().unwrap();
+        let strings = Desc::read_strs(&[&offsets], &table)?
+            .pop()
+            .expect("read_strs has length 1");
 
         Ok(
             Desc {
@@ -199,7 +205,10 @@ impl Desc {
         )
     }
 
-    fn parse_user(r: &mut AlignReader) -> Result<Vec<cap::VarCap>, DescError> {
+    // Returns user-defined capabilities, or an empty vector if the
+    // reader is exhausted, or an error if there is extra data that is
+    // invalid.
+    fn parse_user(r: &mut AlignReader) -> Result<Vec<Cap>, DescError> {
         let ext_header = r.read_words(5);
         if let Err(e) = ext_header {
             return match e.kind() {
@@ -207,7 +216,7 @@ impl Desc {
                        _ => Err(DescError::from(e)),
                    };
         }
-        let ext_header = ext_header.unwrap();
+        let ext_header = ext_header.expect("ext_header is Ok()");
 
         let mut ext_bools = Desc::read_bools(r, ext_header[0] as usize)?;
         let mut ext_nums = r.read_words(ext_header[1] as usize)?;
@@ -216,40 +225,55 @@ impl Desc {
             r.read_words(ext_bools.len() + ext_nums.len() + ext_offs.len())?;
         let ext_table = r.read_bytes(ext_header[4] as usize)?;
 
-        // Unwrapping cannot fail; see the definition of read_strs.
         let mut ext_data =
             Desc::read_strs(&[&ext_offs, &ext_name_offs], &ext_table)?;
-        let mut ext_names = ext_data.pop().unwrap();
-        let mut ext_strs = ext_data.pop().unwrap();
+        let mut ext_names =
+            ext_data.pop().expect("read_strs.len() == 2");
+        let mut ext_strs =
+            ext_data.pop().expect("read_strs.len() == 2");
 
         let mut ext = Vec::new();
         ext_strs.reverse();
         for val in ext_strs {
-            let name = str::from_utf8(&ext_names.pop().unwrap())?.to_owned();
-            ext.push(cap::VarCap::Str(name, val));
+            let name =
+                &ext_names
+                     .pop()
+                     .expect("names.len() == (strs + nums + bools).len()");
+            let name = str::from_utf8(name)?.to_owned();
+            ext.push(Cap::Str(StrName::U(name), val));
         }
         ext_nums.reverse();
         for val in ext_nums {
-            let name = str::from_utf8(&ext_names.pop().unwrap())?.to_owned();
-            ext.push(cap::VarCap::Num(name, val));
+            let name =
+                &ext_names
+                     .pop()
+                     .expect("names.len() == (strs + nums + bools).len()");
+            let name = str::from_utf8(name)?.to_owned();
+            ext.push(Cap::Num(NumName::U(name), val));
         }
         ext_bools.reverse();
         for val in ext_bools {
-            let name = str::from_utf8(&ext_names.pop().unwrap())?.to_owned();
-            ext.push(cap::VarCap::Bool(name, val));
+            let name =
+                &ext_names
+                     .pop()
+                     .expect("names.len() == (strs + nums + bools).len()");
+            let name = str::from_utf8(name)?.to_owned();
+            ext.push(Cap::Bool(BoolName::U(name), val));
         }
 
         Ok(ext)
     }
 
+    // Turns a sequence of 0 or 1 bytes into a vector of bool.
     fn read_bools(r: &mut AlignReader, n: usize) -> io::Result<Vec<bool>> {
         let buf = r.read_bytes(n)?;
         Ok(buf.into_iter().map(|b| !(b == 0)).collect())
     }
 
-    // read_strs either returns an error, or a vector with the same
-    // size and shape as `offsets`, so that `offsets.len()` calls to
-    // `pop()` on the return value will always succeed.
+    // Parses a string table using one or two offset tables. It either
+    // returns an error, or a vector with the same size and shape as
+    // `offsets`, so that `offsets.len()` calls to `pop()` on the
+    // return value will always succeed.
     fn read_strs(
         offsets: &[&[u16]],
         table: &[u8],
@@ -292,7 +316,7 @@ impl Desc {
     pub fn get_bool_ext(&self, name: &str) -> bool {
         for ecap in &self.ext {
             match *ecap {
-                cap::VarCap::Bool(ref n, v) if n == name => {
+                Cap::Bool(BoolName::U(ref n), v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -305,7 +329,7 @@ impl Desc {
     pub fn get_num_ext(&self, name: &str) -> u16 {
         for ecap in &self.ext {
             match *ecap {
-                cap::VarCap::Num(ref n, v) if n == name => {
+                Cap::Num(NumName::U(ref n), v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -318,7 +342,7 @@ impl Desc {
     pub fn get_str_ext(&self, name: &str) -> &[u8] {
         for ecap in &self.ext {
             match *ecap {
-                cap::VarCap::Str(ref n, ref v) if n == name => {
+                Cap::Str(StrName::U(ref n), ref v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -327,68 +351,27 @@ impl Desc {
         &[]
     }
 
-    // Only public for use in `desc!` macro.
-    #[doc(hidden)]
-    pub fn from_literal(names: &[String], pairs: &[cap::DPair]) -> Desc {
-        use self::cap::VarCap::*;
-
-        let mut bools: Vec<bool> = vec![false; cap::NUM_BOOLS];
-        let mut nums: Vec<u16> = vec![0xffff; cap::NUM_INTS];
-        let mut strings: Vec<Vec<u8>> = vec![Vec::new(); cap::NUM_STRS];
-        let mut ext: Vec<cap::VarCap> = Vec::new();
-        let mut maxb: usize = 0;
-        let mut maxn: usize = 0;
-        let mut maxs: usize = 0;
-
-        for pair in pairs {
-            match *pair {
-                cap::DPair(i, Bool(ref n, v)) if v => {
-                    if n != "" {
-                        ext.push(Bool(n.clone(), v));
-                    } else {
-                        if i >= maxb {
-                            maxb = i + 1;
-                        }
-                        bools[i] = v;
-                    }
-                }
-                cap::DPair(i, Num(ref n, v)) if v != 0xffff => {
-                    if n != "" {
-                        ext.push(Num(n.clone(), v));
-                    } else {
-                        if i >= maxn {
-                            maxn = i + 1;
-                        }
-                        nums[i] = v;
-                    }
-                }
-                cap::DPair(i, Str(ref n, ref v)) if !v.is_empty() => {
-                    if n != "" {
-                        ext.push(Str(n.clone(), v.clone()));
-                    } else {
-                        if i >= maxs {
-                            maxs = i + 1;
-                        }
-                        strings[i] = v.clone();
-                    }
-                }
+    fn update(&mut self, caps: &[Cap]) {
+        use self::Cap::*;
+        for cap in caps {
+            match *cap {
+                Bool(BoolName::P(idx), v) => (),
                 _ => (),
             }
         }
-        bools.truncate(maxb);
-        bools.shrink_to_fit();
-        nums.truncate(maxn);
-        nums.shrink_to_fit();
-        strings.truncate(maxs);
-        strings.shrink_to_fit();
+    }
 
-        Desc {
+    pub fn from_literal(names: &[String], caps: &[Cap]) -> Desc {
+        let mut desc = Desc {
             names: Vec::from(names),
-            bools,
-            nums,
-            strings,
-            ext,
-        }
+            bools: Vec::new(),
+            nums: Vec::new(),
+            strings: Vec::new(),
+            ext: Vec::new(),
+        };
+
+        desc.update(caps);
+        desc
     }
 }
 
@@ -429,8 +412,14 @@ impl Desc {
 ///     // tmux uses this to indicate TrueColor support
 ///     "Tc" => true,
 ///     // emacs uses these for TrueColor
-///     "setb24" => "\x1b[48;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm",
-///     "setf24" => "\x1b[38;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm"
+///     "setb24" => "\x1b[48;2;\
+///                  %p1%{65536}%/%d;\
+///                  %p1%{256}%/%{255}%&%d;\
+///                  %p1%{255}%&%dm",
+///     "setf24" => "\x1b[38;2;\
+///                  %p1%{65536}%/%d;\
+///                  %p1%{256}%/%{255}%&%d;\
+///                  %p1%{255}%&%dm"
 /// ];
 /// # }
 /// ```
@@ -441,8 +430,8 @@ impl Desc {
 /// [`Number`](../terminfo/cap/struct.Number.html), or
 /// [`String`](../terminfo/cap/struct.String.html) capability name,
 /// and `val` is a `bool`, `u16`, or `AsRef<[u8]>` respectively; for
-/// user-defined capabilities, `name` must be a `&'static str` and
-/// `val` can be a `bool`, a `u16`, or a `&'static str`.
+/// user-defined capabilities, `name` must be `Borrow<str>` and `val`
+/// can be a `bool`, a `u16`, or a `&'static str`.
 #[macro_export]
 macro_rules! desc {
     // Finish processing.
@@ -481,6 +470,10 @@ macro_rules! desc {
 }
 
 
+// The terminfo binary format contains padding bytes as necessary to
+// keep u16 data (but not bool or string data) at word-aligned file
+// offsets. `AlignReader` handles this padding (as well as endianness)
+// when reading bytes and words from a compiled description.
 struct AlignReader<'a> {
     r: &'a mut Read,
     n: usize,
@@ -531,6 +524,9 @@ impl<'a> AlignReader<'a> {
         Ok(buf_16)
     }
 }
+
+// env::var distinguishes between empty and unset; `to_path` and
+// `to_paths` treat them as the same for compatibility with ncurses.
 
 fn to_path<T: Into<PathBuf>>(var: Option<T>) -> Option<PathBuf> {
     match var {

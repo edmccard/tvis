@@ -18,6 +18,7 @@ fn desc_literal() {
     assert_eq!(desc[am], true);
     assert_eq!(desc[xsb], false);
     assert_eq!(desc[cols], 80);
+    assert_eq!(desc[lm], 0xffff);
     assert_eq!(&desc[cr], b"\x0d");
     assert_eq!(vec!["dumb", "80-column dumb tty"], desc.names());
 }
@@ -40,6 +41,8 @@ fn desc_user_literal() {
     assert_eq!(desc[am], true);
     assert_eq!(desc[cols], 80);
     assert_eq!(desc.get_bool_ext("Tc"), true);
+    assert_eq!(desc.get_num_ext("missing"), 0xffff);
+    assert_eq!(desc.get_str_ext("setb24"), setb24.as_bytes());
 }
 
 #[test]

@@ -5,7 +5,8 @@ use std::time::Duration;
 
 /// A parameter for [`tparm`](fn.tparm.html).
 ///
-/// See also [the `params!` macro](../macros.params.html).
+/// The `params!` macro](../macros.params.html) defines a convenient
+/// literal syntax for groups of parameters.
 #[derive(Clone, Debug)]
 pub enum Param {
     Absent,
@@ -13,6 +14,10 @@ pub enum Param {
     Str(Vec<u8>),
 }
 
+// `Params` holds a group of parameters. It deals with the one-based
+// indexing used in capability strings, as well as the "%i" command
+// which turns the first two parameters from zero-based coordinates to
+// one-based coordinates.
 #[derive(Debug)]
 struct Params<'a>(&'a mut [Param]);
 
@@ -43,8 +48,7 @@ impl<'a> Params<'a> {
     }
 }
 
-/// Parameter lists for
-/// [`terminfo::tparm`](terminfo/fn.tparm.html).
+/// Parameter lists for [`terminfo::tparm`](terminfo/fn.tparm.html).
 #[macro_export]
 macro_rules! params {
     ($($p:expr),* $(,)*) => {{
@@ -86,7 +90,7 @@ where
 
 
 /// Variables for [`tparm`](fn.tparm.html).
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Vars(Vec<Param>);
 
 impl Vars {
@@ -323,7 +327,7 @@ pub fn tparm(
             '{' => {
                 let ic = cap.try_number()?;
                 if ic.is_some() && cap.read_char()? == '}' {
-                    stack.push(Int(ic.unwrap() as i32));
+                    stack.push(Int(ic.expect("is_some") as i32));
                 } else {
                     return Err(stx_error("invalid int constant"));
                 }

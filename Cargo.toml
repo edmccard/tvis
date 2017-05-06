@@ -1,11 +1,2 @@
-[package]
-name = "tvis"
-version = "0.7.0"
-authors = ["Ed McCardell <edmccard@hotmail.com>"]
-license = "MIT/Apache-2.0"
-repository = "https://github.com/edmccard/tvis"
-description = """
-A console/terminal UI library (very alpha! such WIP!)
-"""
-
-[dependencies]
+[workspace]
+members = ["tvis", "tinf"]

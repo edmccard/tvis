@@ -1,0 +1,6 @@
+[package]
+name = "tinf"
+version = "0.10.0"
+authors = ["Ed McCardell <edmccard@hotmail.com>"]
+
+[dependencies]

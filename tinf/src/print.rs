@@ -48,7 +48,7 @@ impl<'a> Params<'a> {
     }
 }
 
-/// Parameter lists for [`terminfo::tparm`](terminfo/fn.tparm.html).
+/// Parameter lists for [`tparm`](fn.tparm.html).
 #[macro_export]
 macro_rules! params {
     ($($p:expr),* $(,)*) => {{

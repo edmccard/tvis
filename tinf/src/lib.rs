@@ -42,18 +42,19 @@ use self::cap::{Cap, BoolName, NumName, StrName};
 /// An absent capability will be `false`, `0xffff`, or an empty
 /// slice, for booleans, numbers, and strings respectively.
 ///
-/// The [`desc!` macro](../macro.desc.html) provides syntax for `Desc`
+/// The [`desc!` macro](macro.desc.html) provides syntax for `Desc`
 /// literals.
 ///
 /// # Examples
 ///
-/// Look up the `rs1` capability for xterm-256color:
+/// Read the description for `xterm-256color` and look up the `rs1`
+/// capability:
 ///
 /// ```ignore
-/// # use tvis::terminfo::DescError;
+/// # use tinfo::DescError;
 /// # fn foo() -> Result<(), DescError> {
-/// use tvis::terminfo::Desc;
-/// use tvis::terminfo::cap::rs1;
+/// use tinfo::Desc;
+/// use tinfo::cap::rs1;
 ///
 /// let mut file = Desc::file("xterm-256color")?;
 /// let desc = Desc::parse(&mut file)?;
@@ -376,7 +377,7 @@ impl Desc {
 }
 
 
-/// A syntax for [`terminfo::Desc`](terminfo/struct.Desc.html) literals.
+/// A syntax for [`Desc`](struct.Desc.html) literals.
 ///
 /// # Examples
 ///
@@ -386,7 +387,7 @@ impl Desc {
 /// #[macro_use]
 /// extern crate tvis;
 /// # fn main() {
-/// use tvis::terminfo::cap::*;
+/// use tinf::cap::*;
 ///
 /// let desc = desc![
 ///     "dumb", "80-column dumb terminal",
@@ -426,9 +427,9 @@ impl Desc {
 ///
 /// Terminal names are specified by strings; predefined capabilities
 /// are specified by `name => val` pairs, where `name` is a
-/// [`Boolean`](../terminfo/cap/struct.Boolean.html),
-/// [`Number`](../terminfo/cap/struct.Number.html), or
-/// [`String`](../terminfo/cap/struct.String.html) capability name,
+/// [`Boolean`](../tinf/cap/struct.Boolean.html),
+/// [`Number`](../tinf/cap/struct.Number.html), or
+/// [`String`](../tinf/cap/struct.String.html) capability name,
 /// and `val` is a `bool`, `u16`, or `AsRef<[u8]>` respectively; for
 /// user-defined capabilities, `name` must be `Borrow<str>` and `val`
 /// can be a `bool`, a `u16`, or a `&'static str`.
@@ -436,7 +437,7 @@ impl Desc {
 macro_rules! desc {
     // Finish processing.
     (@acc [$($ns:expr),*] [$($ps:expr),*]) => {
-        $crate::terminfo::Desc::from_literal(
+        $crate::Desc::from_literal(
             &[$(::std::string::String::from($ns)),*][..],
             &[$($ps),*][..]
         );

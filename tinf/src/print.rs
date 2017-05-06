@@ -53,7 +53,7 @@ impl<'a> Params<'a> {
 macro_rules! params {
     ($($p:expr),* $(,)*) => {{
         #[allow(unused_imports)]
-        use $crate::terminfo::{ToParamFromInt, ToParamFromStr};
+        use $crate::{ToParamFromInt, ToParamFromStr};
         [$($p.to_param()),*]
     }}
 }

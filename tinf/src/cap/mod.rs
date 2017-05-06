@@ -74,7 +74,7 @@ pub use self::names::*;
 /// `has_hardware_tabs`       | `OTpt`
 /// `return_does_clr_eol`     | `OTxr`
 #[derive(Clone, Copy, Debug)]
-pub struct Boolean(usize);
+pub struct Boolean(pub(super) usize);
 
 /// Numeric capability names.
 ///
@@ -122,7 +122,7 @@ pub struct Boolean(usize);
 /// `horizontal_tab_delay`   | `OTdT`
 /// `number_of_function_keys`| `OTkn`
 #[derive(Clone, Copy, Debug)]
-pub struct Number(usize);
+pub struct Number(pub(super) usize);
 
 /// String capability names.
 ///
@@ -545,79 +545,75 @@ pub struct Number(usize);
 /// `memory_unlock`            | `memu`
 /// `box_chars_1`              | `box1`
 #[derive(Clone, Copy, Debug)]
-pub struct String(usize);
+pub struct String(pub(super) usize);
 
 
 #[derive(Debug)]
-pub enum BoolName {
+pub(super) enum BoolName {
     P(Boolean),
     U(StdString),
 }
 
 #[derive(Debug)]
-pub enum NumName {
+pub(super) enum NumName {
     P(Number),
     U(StdString),
 }
 
 #[derive(Debug)]
-pub enum StrName {
+pub(super) enum StrName {
     P(String),
     U(StdString),
 }
 
 #[derive(Debug)]
-pub enum Cap {
+pub(super) enum ICap {
     Bool(BoolName, bool),
     Num(NumName, u16),
     Str(StrName, Vec<u8>),
 }
 
+pub struct Cap(pub(super) ICap);
 
-// impl From<(Boolean, bool)> for DPair {
-//     fn from(val: (Boolean, bool)) -> DPair {
-//         DPair((val.0).0, VarCap::Bool(StdString::new(), val.1))
-//     }
-// }
 
-// impl From<(Number, u16)> for DPair {
-//     fn from(val: (Number, u16)) -> DPair {
-//         DPair((val.0).0, VarCap::Num(StdString::new(), val.1))
-//     }
-// }
+impl From<(Boolean, bool)> for Cap {
+    fn from(val: (Boolean, bool)) -> Cap {
+        Cap(ICap::Bool(BoolName::P(val.0), val.1))
+    }
+}
 
-// impl<V> From<(String, V)> for DPair
-// where
-//     V: AsRef<[u8]>,
-// {
-//     fn from(val: (String, V)) -> DPair {
-//         DPair(
-//             (val.0).0,
-//             VarCap::Str(StdString::new(), (val.1).as_ref().into()),
-//         )
-//     }
-// }
+impl From<(Number, u16)> for Cap {
+    fn from(val: (Number, u16)) -> Cap {
+        Cap(ICap::Num(NumName::P(val.0), val.1))
+    }
+}
 
-// impl<K: Borrow<str>> From<(K, bool)> for DPair {
-//     fn from(val: (K, bool)) -> DPair {
-//         DPair(NUM_BOOLS, VarCap::Bool((val.0).borrow().into(), val.1))
-//     }
-// }
+impl<V> From<(String, V)> for Cap
+where
+    V: AsRef<[u8]>,
+{
+    fn from(val: (String, V)) -> Cap {
+        Cap(ICap::Str(StrName::P(val.0), (val.1).as_ref().into()))
+    }
+}
 
-// impl<K: Borrow<str>> From<(K, u16)> for DPair {
-//     fn from(val: (K, u16)) -> DPair {
-//         DPair(NUM_INTS, VarCap::Num((val.0).borrow().into(), val.1))
-//     }
-// }
+impl<K: Borrow<str>> From<(K, bool)> for Cap {
+    fn from(val: (K, bool)) -> Cap {
+        Cap(ICap::Bool(BoolName::U((val.0).borrow().into()), val.1))
+    }
+}
 
-// impl<K: Borrow<str>> From<(K, &'static str)> for DPair {
-//     fn from(val: (K, &str)) -> DPair {
-//         DPair(
-//             NUM_STRS,
-//             VarCap::Str((val.0).borrow().into(), (val.1).into()),
-//         )
-//     }
-// }
+impl<K: Borrow<str>> From<(K, u16)> for Cap {
+    fn from(val: (K, u16)) -> Cap {
+        Cap(ICap::Num(NumName::U((val.0).borrow().into()), val.1))
+    }
+}
+
+impl<K: Borrow<str>> From<(K, &'static str)> for Cap {
+    fn from(val: (K, &str)) -> Cap {
+        Cap(ICap::Str(StrName::U((val.0).borrow().into()), (val.1).into()))
+    }
+}
 
 
 static DEF_BOOL: bool = false;

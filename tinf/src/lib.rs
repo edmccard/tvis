@@ -26,7 +26,7 @@ mod print;
 
 pub use self::print::{CapError, Param, ToParamFromInt, ToParamFromStr, Vars,
                       tparm, tputs};
-use self::cap::{Cap, BoolName, NumName, StrName};
+use self::cap::{Cap, ICap, BoolName, NumName, StrName};
 
 
 /// A terminal description.
@@ -68,7 +68,7 @@ pub struct Desc {
     bools: Vec<bool>,
     nums: Vec<u16>,
     strings: Vec<Vec<u8>>,
-    ext: Vec<Cap>,
+    ext: Vec<ICap>,
 }
 
 impl Desc {
@@ -209,7 +209,7 @@ impl Desc {
     // Returns user-defined capabilities, or an empty vector if the
     // reader is exhausted, or an error if there is extra data that is
     // invalid.
-    fn parse_user(r: &mut AlignReader) -> Result<Vec<Cap>, DescError> {
+    fn parse_user(r: &mut AlignReader) -> Result<Vec<ICap>, DescError> {
         let ext_header = r.read_words(5);
         if let Err(e) = ext_header {
             return match e.kind() {
@@ -241,7 +241,7 @@ impl Desc {
                      .pop()
                      .expect("names.len() == (strs + nums + bools).len()");
             let name = str::from_utf8(name)?.to_owned();
-            ext.push(Cap::Str(StrName::U(name), val));
+            ext.push(ICap::Str(StrName::U(name), val));
         }
         ext_nums.reverse();
         for val in ext_nums {
@@ -250,7 +250,7 @@ impl Desc {
                      .pop()
                      .expect("names.len() == (strs + nums + bools).len()");
             let name = str::from_utf8(name)?.to_owned();
-            ext.push(Cap::Num(NumName::U(name), val));
+            ext.push(ICap::Num(NumName::U(name), val));
         }
         ext_bools.reverse();
         for val in ext_bools {
@@ -259,7 +259,7 @@ impl Desc {
                      .pop()
                      .expect("names.len() == (strs + nums + bools).len()");
             let name = str::from_utf8(name)?.to_owned();
-            ext.push(Cap::Bool(BoolName::U(name), val));
+            ext.push(ICap::Bool(BoolName::U(name), val));
         }
 
         Ok(ext)
@@ -317,7 +317,7 @@ impl Desc {
     pub fn get_bool_ext(&self, name: &str) -> bool {
         for ecap in &self.ext {
             match *ecap {
-                Cap::Bool(BoolName::U(ref n), v) if n == name => {
+                ICap::Bool(BoolName::U(ref n), v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -330,7 +330,7 @@ impl Desc {
     pub fn get_num_ext(&self, name: &str) -> u16 {
         for ecap in &self.ext {
             match *ecap {
-                Cap::Num(NumName::U(ref n), v) if n == name => {
+                ICap::Num(NumName::U(ref n), v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -343,7 +343,7 @@ impl Desc {
     pub fn get_str_ext(&self, name: &str) -> &[u8] {
         for ecap in &self.ext {
             match *ecap {
-                Cap::Str(StrName::U(ref n), ref v) if n == name => {
+                ICap::Str(StrName::U(ref n), ref v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -353,11 +353,37 @@ impl Desc {
     }
 
     fn update(&mut self, caps: &[Cap]) {
-        use self::Cap::*;
+        fn add_val<T: Default>(vs: &mut Vec<T>, idx: usize, val: T) {
+            if idx >= vs.len() {
+                for _ in 0..(idx - vs.len()) {
+                    vs.push(Default::default());
+                }
+                vs.push(val);
+            } else {
+                vs[idx] = val;
+            }
+        }
+        use self::ICap::*;
         for cap in caps {
-            match *cap {
-                Bool(BoolName::P(idx), v) => (),
-                _ => (),
+            match cap.0 {
+                Bool(BoolName::P(idx), v) => {
+                    add_val(&mut self.bools, idx.0, v);
+                }
+                Bool(BoolName::U(ref n), v) => {
+                    self.ext.push(Bool(BoolName::U(n.clone()), v));
+                }
+                Num(NumName::P(idx), v) => {
+                    add_val(&mut self.nums, idx.0, v);
+                }
+                Num(NumName::U(ref n), v) => {
+                    self.ext.push(Num(NumName::U(n.clone()), v));
+                }
+                Str(StrName::P(idx), ref v) => {
+                    add_val(&mut self.strings, idx.0, v.to_vec());
+                }
+                Str(StrName::U(ref n), ref v) => {
+                    self.ext.push(Str(StrName::U(n.clone()), v.to_vec()));
+                }
             }
         }
     }
@@ -385,7 +411,7 @@ impl Desc {
 ///
 /// ```
 /// #[macro_use]
-/// extern crate tvis;
+/// extern crate tinf;
 /// # fn main() {
 /// use tinf::cap::*;
 ///
@@ -405,7 +431,7 @@ impl Desc {
 ///
 /// ```
 /// #[macro_use]
-/// # extern crate tvis;
+/// # extern crate tinf;
 /// # fn main() {
 /// let desc = desc![
 ///     // various pre-defined capbilities

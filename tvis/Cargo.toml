@@ -10,3 +10,6 @@ A console/terminal UI library (very alpha! such WIP!)
 
 [dependencies]
 tinf = { path = "../tinf", version = "0.10.0" }
+
+[badges]
+travis-ci = { repository = "edmccard/tvis" }

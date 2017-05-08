@@ -46,6 +46,29 @@ fn desc_user_literal() {
 }
 
 #[test]
+fn cap_string_names() {
+    use super::cap::*;
+    let desc = desc![
+        "dumb", "80-column dumb tty",
+        am => true,
+        cols => 80,
+        bel => b"\x07",
+        cr => b"\r",
+        cud1 => b"\n",
+        ind => b"\n",
+    ];
+    assert_eq!(desc[Number::named("cols").unwrap()], 80);
+    assert_eq!(desc[Boolean::named("am").unwrap()], true);
+    assert_eq!(&desc[String::named("ind").unwrap()], b"\n");
+}
+
+#[test]
+#[should_panic]
+fn cap_string_names_bad() {
+    super::cap::Number::named("xyzzy").unwrap();
+}
+
+#[test]
 fn tparm_basic_setabf() {
     let mut output = Vec::new();
     let _ = tparm(

@@ -1,10 +1,10 @@
-//! An interface to terminfo databases.
+//! A low-level interface to terminfo databases.
 //!
 //! # Usage
 //!
-//! For loading terminal descriptions, see [`Desc`](struct.Desc.html);
-//! for sending commands to the terminal, see [`tparm`](fn.tparm.html)
-//! and [`tputs`](fn.tputs.html).
+//! To find and read terminal descriptions, see
+//! [`Desc`](struct.Desc.html); to send commands to a terminal, see
+//! [`tparm`](fn.tparm.html) and [`tputs`](fn.tputs.html).
 //!
 //! ## Platform Compatibility
 //!
@@ -29,9 +29,9 @@ pub use self::print::{CapError, Param, ToParamFromInt, ToParamFromStr, Vars,
 use self::cap::{Cap, ICap, BoolName, NumName, StrName};
 
 
-/// A terminal description.
+/// The names and capabilities that make up a terminal description.
 ///
-/// The predefined capabilities are read by indexing a `Desc` object
+/// Predefined capabilities are read by indexing a `Desc` object
 /// with a [`Boolean`](cap/struct.Boolean.html),
 /// [`Number`](cap/struct.Number.html), or
 /// [`String`](cap/struct.String.html) capability name. For example,
@@ -107,10 +107,8 @@ impl Desc {
             _ => return Err(name_error(term_name)),
         }
 
-        let first_char = term_name
-            .chars()
-            .next()
-            .expect("term_name is non-empty");
+        let first_char =
+            term_name.chars().next().expected("non-empty term_name");
         let first_hex = format!("{:x}", first_char as usize);
         let first_char = first_char.to_string();
 
@@ -193,7 +191,7 @@ impl Desc {
         let table = r.read_bytes(string_sz)?;
         let strings = Desc::read_strs(&[&offsets], &table)?
             .pop()
-            .expect("read_strs has length 1");
+            .expected("read_strs with length 1");
 
         Ok(
             Desc {
@@ -217,7 +215,7 @@ impl Desc {
                        _ => Err(DescError::from(e)),
                    };
         }
-        let ext_header = ext_header.expect("ext_header is Ok()");
+        let ext_header = ext_header.expected("Ok() ext_header");
 
         let mut ext_bools = Desc::read_bools(r, ext_header[0] as usize)?;
         let mut ext_nums = r.read_words(ext_header[1] as usize)?;
@@ -228,10 +226,9 @@ impl Desc {
 
         let mut ext_data =
             Desc::read_strs(&[&ext_offs, &ext_name_offs], &ext_table)?;
-        let mut ext_names =
-            ext_data.pop().expect("read_strs.len() == 2");
-        let mut ext_strs =
-            ext_data.pop().expect("read_strs.len() == 2");
+        let mut ext_names = ext_data.pop().expected("ext_data.len() == 2");
+        // TODO: must be unique and not names of predefined.
+        let mut ext_strs = ext_data.pop().expected("ext_data.len() == 2");
 
         let mut ext = Vec::new();
         ext_strs.reverse();
@@ -239,7 +236,7 @@ impl Desc {
             let name =
                 &ext_names
                      .pop()
-                     .expect("names.len() == (strs + nums + bools).len()");
+                     .expected("names.len == (strs + nums + bools).len");
             let name = str::from_utf8(name)?.to_owned();
             ext.push(ICap::Str(StrName::U(name), val));
         }
@@ -248,7 +245,7 @@ impl Desc {
             let name =
                 &ext_names
                      .pop()
-                     .expect("names.len() == (strs + nums + bools).len()");
+                     .expected("names.len == (strs + nums + bools).len");
             let name = str::from_utf8(name)?.to_owned();
             ext.push(ICap::Num(NumName::U(name), val));
         }
@@ -257,7 +254,7 @@ impl Desc {
             let name =
                 &ext_names
                      .pop()
-                     .expect("names.len() == (strs + nums + bools).len()");
+                     .expected("names.len == (strs + nums + bools).len");
             let name = str::from_utf8(name)?.to_owned();
             ext.push(ICap::Bool(BoolName::U(name), val));
         }
@@ -313,9 +310,11 @@ impl Desc {
         &self.names
     }
 
-    /// Check for a user-defined boolean capability.
+    /// Query a user-defined boolean capability.
+    ///
+    /// If the capability is absent, returns `false`.
     pub fn get_bool_ext(&self, name: &str) -> bool {
-        for ecap in &self.ext {
+        for ecap in self.ext.iter().rev() {
             match *ecap {
                 ICap::Bool(BoolName::U(ref n), v) if n == name => {
                     return v;
@@ -326,9 +325,11 @@ impl Desc {
         false
     }
 
-    /// Check for a user-defined numeric capability.
+    /// Query a user-defined numeric capability.
+    ///
+    /// If the capability is absent, returns `0xffff`.
     pub fn get_num_ext(&self, name: &str) -> u16 {
-        for ecap in &self.ext {
+        for ecap in self.ext.iter().rev() {
             match *ecap {
                 ICap::Num(NumName::U(ref n), v) if n == name => {
                     return v;
@@ -339,9 +340,11 @@ impl Desc {
         0xffff
     }
 
-    /// Check for a user-defined string capability.
+    /// Query a user-defined string capability.
+    ///
+    /// If the capability is absent, returns an empty slice.
     pub fn get_str_ext(&self, name: &str) -> &[u8] {
-        for ecap in &self.ext {
+        for ecap in self.ext.iter().rev() {
             match *ecap {
                 ICap::Str(StrName::U(ref n), ref v) if n == name => {
                     return v;
@@ -363,6 +366,7 @@ impl Desc {
                 vs[idx] = val;
             }
         }
+
         use self::ICap::*;
         for cap in caps {
             match cap.0 {
@@ -388,6 +392,8 @@ impl Desc {
         }
     }
 
+    // Only public for use in the `desc!` macro.
+    #[doc(hidden)]
     pub fn from_literal(names: &[String], caps: &[Cap]) -> Desc {
         let mut desc = Desc {
             names: Vec::from(names),
@@ -498,9 +504,9 @@ macro_rules! desc {
 
 
 // The terminfo binary format contains padding bytes as necessary to
-// keep u16 data (but not bool or string data) at word-aligned file
-// offsets. `AlignReader` handles this padding (as well as endianness)
-// when reading bytes and words from a compiled description.
+// keep u16 data chunks at word-aligned file offsets. `AlignReader`
+// handles this padding (as well as endianness) when reading bytes and
+// words from a compiled description.
 struct AlignReader<'a> {
     r: &'a mut Read,
     n: usize,
@@ -538,7 +544,7 @@ impl<'a> AlignReader<'a> {
         let mut buf_8 = unsafe {
             ::std::slice::from_raw_parts_mut(
                 buf_16.as_mut_ptr() as *mut u8,
-                n * 2,
+                buf_16.len() * 2,
             )
         };
         self.r.read_exact(&mut buf_8)?;
@@ -651,3 +657,33 @@ impl From<str::Utf8Error> for DescError {
 
 #[cfg(test)]
 mod tests;
+
+// Utility trait. `.expected("foo")` means that ... you expected
+// "foo", and you panic if you didn't get it.
+trait Expectation<T> {
+    fn expected(self, msg: &str) -> T;
+}
+
+impl<T> Expectation<T> for Option<T> {
+    fn expected(self, msg: &str) -> T {
+        match self {
+            Some(val) => val,
+            _ => expectation_failed(msg),
+        }
+    }
+}
+
+impl<T, E> Expectation<T> for Result<T, E> {
+    fn expected(self, msg: &str) -> T {
+        match self {
+            Ok(val) => val,
+            _ => expectation_failed(msg),
+        }
+    }
+}
+
+#[inline(never)]
+#[cold]
+fn expectation_failed(msg: &str) -> ! {
+    panic!("expected {}", msg)
+}

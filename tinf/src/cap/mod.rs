@@ -547,6 +547,63 @@ pub struct Number(pub(super) usize);
 #[derive(Clone, Copy, Debug)]
 pub struct String(pub(super) usize);
 
+impl Boolean {
+    /// The `Boolean` capabilitiy name corresponding to the string
+    /// `name`.
+    pub fn named<T: Borrow<str>>(name: T) -> Option<Boolean> {
+        let name = name.borrow();
+        let len = name.len();
+        let pos = if len >= 2 && len <= 6 {
+            BOOLS.iter().position(|&n| n == name)
+        } else if len >= 8 && len <= 24 {
+            BOOLEANS.iter().position(|&n| n == name)
+        } else {
+            None
+        };
+        pos.map(Boolean)
+    }
+}
+
+impl Number {
+    /// The `Number` capabilitiy name corresponding to the string
+    /// `name`.
+    pub fn named<T: Borrow<str>>(name: T) -> Option<Number> {
+        let name = name.borrow();
+        let len = name.len();
+        let pos = if len >= 2 && len < 5 {
+            NUMS.iter().position(|&n| n == name)
+        } else if len >= 5 && len <= 23 {
+            NUMBERS
+                .iter()
+                .position(|&n| n == name)
+                .or_else(|| NUMS.iter().position(|&n| n == name))
+        } else {
+            None
+        };
+        pos.map(Number)
+    }
+}
+
+impl String {
+    /// The `String` capabilitiy name corresponding to the string
+    /// `name`.
+    pub fn named<T: Borrow<str>>(name: T) -> Option<String> {
+        let name = name.borrow();
+        let len = name.len();
+        let pos = if len < 6 {
+            STRS.iter().position(|&n| n == name)
+        } else if len <= 25 {
+            STRINGS
+                .iter()
+                .position(|&n| n == name)
+                .or_else(|| STRS.iter().position(|&n| n == name))
+        } else {
+            None
+        };
+        pos.map(String)
+    }
+}
+
 
 #[derive(Debug)]
 pub(super) enum BoolName {
@@ -573,6 +630,7 @@ pub(super) enum ICap {
     Str(StrName, Vec<u8>),
 }
 
+/// A generic capability name and an associated value.
 pub struct Cap(pub(super) ICap);
 
 
@@ -611,7 +669,7 @@ impl<K: Borrow<str>> From<(K, u16)> for Cap {
 
 impl<K: Borrow<str>> From<(K, &'static str)> for Cap {
     fn from(val: (K, &str)) -> Cap {
-        Cap(ICap::Str(StrName::U((val.0).borrow().into()), (val.1).into()))
+        Cap(ICap::Str(StrName::U((val.0).borrow().into()), (val.1).into()),)
     }
 }
 
@@ -619,7 +677,6 @@ impl<K: Borrow<str>> From<(K, &'static str)> for Cap {
 static DEF_BOOL: bool = false;
 
 impl Index<Boolean> for super::Desc {
-    #[doc(hidden)]
     type Output = bool;
 
     /// The value of the boolean capability named by `index`.
@@ -635,7 +692,6 @@ impl Index<Boolean> for super::Desc {
 static DEF_NUM: u16 = 0xffff;
 
 impl Index<Number> for super::Desc {
-    #[doc(hidden)]
     type Output = u16;
 
     /// The value of the numeric capability named by `index`.
@@ -651,7 +707,6 @@ impl Index<Number> for super::Desc {
 static DEF_STR: &[u8] = &[];
 
 impl Index<String> for super::Desc {
-    #[doc(hidden)]
     type Output = [u8];
 
     /// The value of the string capability named by `index`.

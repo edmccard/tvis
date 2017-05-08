@@ -3,6 +3,8 @@ use std::io::Write;
 use std::thread::sleep;
 use std::time::Duration;
 
+use Expectation;
+
 /// A parameter for [`tparm`](fn.tparm.html).
 ///
 /// The `params!` macro](../macros.params.html) defines a convenient
@@ -60,6 +62,7 @@ macro_rules! params {
 
 // ToParamFromStr and ToParamFromInt are only public for use in the
 // `params!` macro.
+
 #[doc(hidden)]
 pub trait ToParamFromStr {
     fn to_param(&self) -> Param;
@@ -129,6 +132,7 @@ impl Vars {
     }
 }
 
+// Handles pushing
 struct ParamStack(Vec<Param>);
 
 impl ParamStack {
@@ -327,7 +331,7 @@ pub fn tparm(
             '{' => {
                 let ic = cap.try_number()?;
                 if ic.is_some() && cap.read_char()? == '}' {
-                    stack.push(Int(ic.expect("is_some") as i32));
+                    stack.push(Int(ic.expected("is_some") as i32));
                 } else {
                     return Err(stx_error("invalid int constant"));
                 }

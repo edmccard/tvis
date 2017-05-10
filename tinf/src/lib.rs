@@ -8,10 +8,10 @@
 //!
 //! ## Platform Compatibility
 //!
-//! This requires the local terminfo database to be in a directory
-//! tree format; it will not work with a hashed database format. In
-//! other words, it should Just Work on Linux/OSX/Cygwin, but it might
-//! not work out of the box on BSD operating systems.
+//! This requires a local terminfo database in directory tree format;
+//! it will not work with a hashed database. In other words, it should
+//! Just Work on Linux/OSX/Cygwin, but it might not work out of the
+//! box on BSD operating systems.
 
 use std::env;
 use std::fs::File;
@@ -26,7 +26,7 @@ mod print;
 
 pub use self::print::{CapError, Param, ToParamFromInt, ToParamFromStr, Vars,
                       tparm, tputs};
-use self::cap::{Cap, ICap, BoolName, NumName, StrName};
+use self::cap::{Cap, ICap, CapName, UserDef};
 
 
 /// The names and capabilities that make up a terminal description.
@@ -50,11 +50,11 @@ use self::cap::{Cap, ICap, BoolName, NumName, StrName};
 /// Read the description for `xterm-256color` and look up the `rs1`
 /// capability:
 ///
-/// ```ignore
-/// # use tinfo::DescError;
+/// ```no_run
+/// # use tinf::DescError;
 /// # fn foo() -> Result<(), DescError> {
-/// use tinfo::Desc;
-/// use tinfo::cap::rs1;
+/// use tinf::Desc;
+/// use tinf::cap::rs1;
 ///
 /// let mut file = Desc::file("xterm-256color")?;
 /// let desc = Desc::parse(&mut file)?;
@@ -237,8 +237,8 @@ impl Desc {
                 &ext_names
                      .pop()
                      .expected("names.len == (strs + nums + bools).len");
-            let name = str::from_utf8(name)?.to_owned();
-            ext.push(ICap::Str(StrName::U(name), val));
+            let name = UserDef(str::from_utf8(name)?.to_owned());
+            ext.push(ICap::Str(CapName::U(name), val));
         }
         ext_nums.reverse();
         for val in ext_nums {
@@ -246,8 +246,8 @@ impl Desc {
                 &ext_names
                      .pop()
                      .expected("names.len == (strs + nums + bools).len");
-            let name = str::from_utf8(name)?.to_owned();
-            ext.push(ICap::Num(NumName::U(name), val));
+            let name = UserDef(str::from_utf8(name)?.to_owned());
+            ext.push(ICap::Num(CapName::U(name), val));
         }
         ext_bools.reverse();
         for val in ext_bools {
@@ -255,8 +255,8 @@ impl Desc {
                 &ext_names
                      .pop()
                      .expected("names.len == (strs + nums + bools).len");
-            let name = str::from_utf8(name)?.to_owned();
-            ext.push(ICap::Bool(BoolName::U(name), val));
+            let name = UserDef(str::from_utf8(name)?.to_owned());
+            ext.push(ICap::Bool(CapName::U(name), val));
         }
 
         Ok(ext)
@@ -313,10 +313,10 @@ impl Desc {
     /// Query a user-defined boolean capability.
     ///
     /// If the capability is absent, returns `false`.
-    pub fn get_bool_ext(&self, name: &str) -> bool {
+    pub fn get_bool_ext(&self, name: &UserDef) -> bool {
         for ecap in self.ext.iter().rev() {
             match *ecap {
-                ICap::Bool(BoolName::U(ref n), v) if n == name => {
+                ICap::Bool(CapName::U(ref n), v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -328,10 +328,10 @@ impl Desc {
     /// Query a user-defined numeric capability.
     ///
     /// If the capability is absent, returns `0xffff`.
-    pub fn get_num_ext(&self, name: &str) -> u16 {
+    pub fn get_num_ext(&self, name: &UserDef) -> u16 {
         for ecap in self.ext.iter().rev() {
             match *ecap {
-                ICap::Num(NumName::U(ref n), v) if n == name => {
+                ICap::Num(CapName::U(ref n), v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -343,10 +343,10 @@ impl Desc {
     /// Query a user-defined string capability.
     ///
     /// If the capability is absent, returns an empty slice.
-    pub fn get_str_ext(&self, name: &str) -> &[u8] {
+    pub fn get_str_ext(&self, name: &UserDef) -> &[u8] {
         for ecap in self.ext.iter().rev() {
             match *ecap {
-                ICap::Str(StrName::U(ref n), ref v) if n == name => {
+                ICap::Str(CapName::U(ref n), ref v) if n == name => {
                     return v;
                 }
                 _ => (),
@@ -370,24 +370,16 @@ impl Desc {
         use self::ICap::*;
         for cap in caps {
             match cap.0 {
-                Bool(BoolName::P(idx), v) => {
-                    add_val(&mut self.bools, idx.0, v);
+                Bool(CapName::P(idx), v) => {
+                    add_val(&mut self.bools, idx, v);
                 }
-                Bool(BoolName::U(ref n), v) => {
-                    self.ext.push(Bool(BoolName::U(n.clone()), v));
+                Num(CapName::P(idx), v) => {
+                    add_val(&mut self.nums, idx, v);
                 }
-                Num(NumName::P(idx), v) => {
-                    add_val(&mut self.nums, idx.0, v);
+                Str(CapName::P(idx), ref v) => {
+                    add_val(&mut self.strings, idx, v.to_vec());
                 }
-                Num(NumName::U(ref n), v) => {
-                    self.ext.push(Num(NumName::U(n.clone()), v));
-                }
-                Str(StrName::P(idx), ref v) => {
-                    add_val(&mut self.strings, idx.0, v.to_vec());
-                }
-                Str(StrName::U(ref n), ref v) => {
-                    self.ext.push(Str(StrName::U(n.clone()), v.to_vec()));
-                }
+                ref udc => self.ext.push(udc.clone()),
             }
         }
     }
@@ -439,20 +431,20 @@ impl Desc {
 /// #[macro_use]
 /// # extern crate tinf;
 /// # fn main() {
+/// use tinf::cap::UserDef;
 /// let desc = desc![
-///     // various pre-defined capbilities
+///     // tmux can use this to indicate TrueColor support
+///     UserDef::named("Tc") => true,
 ///
-///     // tmux uses this to indicate TrueColor support
-///     "Tc" => true,
-///     // emacs uses these for TrueColor
-///     "setb24" => "\x1b[48;2;\
-///                  %p1%{65536}%/%d;\
-///                  %p1%{256}%/%{255}%&%d;\
-///                  %p1%{255}%&%dm",
-///     "setf24" => "\x1b[38;2;\
-///                  %p1%{65536}%/%d;\
-///                  %p1%{256}%/%{255}%&%d;\
-///                  %p1%{255}%&%dm"
+///     // emacs can use these for TrueColor
+///     UserDef::named("setb24") => "\x1b[48;2;\
+///                                  %p1%{65536}%/%d;\
+///                                  %p1%{256}%/%{255}%&%d;\
+///                                  %p1%{255}%&%dm",
+///     UserDef::named("setf24") => "\x1b[38;2;\
+///                                  %p1%{65536}%/%d;\
+///                                  %p1%{256}%/%{255}%&%d;\
+///                                  %p1%{255}%&%dm"
 /// ];
 /// # }
 /// ```

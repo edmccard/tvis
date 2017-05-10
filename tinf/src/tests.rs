@@ -3,6 +3,19 @@ use super::*;
 
 
 #[test]
+fn desc_file() {
+    use super::cap::*;
+    let mut file = Cursor::new(include_bytes!("test-desc").to_vec());
+    let desc = Desc::parse(&mut file).unwrap();
+    assert_eq!(desc[am], true);
+    assert_eq!(desc[cols], 80);
+    assert_eq!(&desc[cr], b"\x0d");
+    assert_eq!(desc.get_bool_ext(&UserDef::named("userbool")), true);
+    assert_eq!(desc.get_num_ext(&UserDef::named("usernum")), 300);
+    assert_eq!(&desc.get_str_ext(&UserDef::named("userstr")), b"user");
+}
+
+#[test]
 fn desc_literal() {
     use super::cap::*;
     let desc = desc![
@@ -13,7 +26,7 @@ fn desc_literal() {
             cr => b"\r",
             cud1 => b"\n",
             ind => b"\n",
-        ];
+    ];
     assert_eq!(desc[bw], false);
     assert_eq!(desc[am], true);
     assert_eq!(desc[xsb], false);
@@ -27,22 +40,25 @@ fn desc_literal() {
 #[cfg_attr(rustfmt, rustfmt_skip)]
 fn desc_user_literal() {
     use super::cap::{am, cols};
-    let setb24 =
+    let tc = UserDef::named("Tc");
+    let setb24 = UserDef::named("setb24");
+    let setf24 = UserDef::named("setf24");
+    let setb24_val =
         "\x1b[48;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm";
-    let setf24 =
+    let setf24_val =
         "\x1b[38;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm";
     let desc = desc![
         am => true,
         cols => 80,
-        "Tc" => true,
-        "setb24" => setb24,
-        "setf24" => setf24
+        &tc => true,
+        &setb24 => setb24_val,
+        &setf24 => setf24_val,
     ];
     assert_eq!(desc[am], true);
     assert_eq!(desc[cols], 80);
-    assert_eq!(desc.get_bool_ext("Tc"), true);
-    assert_eq!(desc.get_num_ext("missing"), 0xffff);
-    assert_eq!(desc.get_str_ext("setb24"), setb24.as_bytes());
+    assert_eq!(desc.get_bool_ext(&tc), true);
+    assert_eq!(desc.get_num_ext(&UserDef::named("missing")), 0xffff);
+    assert_eq!(desc.get_str_ext(&setb24), setb24_val.as_bytes());
 }
 
 #[test]
@@ -111,8 +127,10 @@ fn tparm_conditionals() {
         b"\\E[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m";
     let _ = tparm(&mut output, cap, &mut params!(1), &mut Vars::new());
     assert_eq!(output, b"\\E[31m");
+    output.clear();
     let _ = tparm(&mut output, cap, &mut params!(8), &mut Vars::new());
     assert_eq!(output, b"\\E[90m");
+    output.clear();
     let _ = tparm(&mut output, cap, &mut params!(42), &mut Vars::new());
     assert_eq!(output, b"\\E[38;5;42m");
 }
@@ -127,6 +145,7 @@ fn tparm_format() {
         &mut Vars::new(),
     );
     assert_eq!(output, b"foofoo ffo");
+    output.clear();
 
     let _ = tparm(
         &mut output,
@@ -135,6 +154,7 @@ fn tparm_format() {
         &mut Vars::new(),
     );
     assert_eq!(output, b"fo  ");
+    output.clear();
 
     let _ = tparm(
         &mut output,
@@ -143,6 +163,7 @@ fn tparm_format() {
         &mut Vars::new(),
     );
     assert_eq!(output, b"1001    11");
+    output.clear();
 
     let _ = tparm(
         &mut output,
@@ -162,9 +183,11 @@ fn tparm_vars() {
 
     let _ = tparm(&mut output, cap, &mut params!(1), &mut vars);
     assert_eq!(output, b"\\E[?1000h\\E[?1003h\\E[?1006h");
+    output.clear();
 
     let _ = tparm(&mut output, cap, &mut params!(0), &mut vars);
     assert_eq!(output, b"\\E[?1000l\\E[?1003l\\E[?1006l");
+    output.clear();
 
     let _ = tparm(&mut output, b"%gz%d", &mut params!(), &mut vars);
     assert_eq!(output, b"0");

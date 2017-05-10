@@ -7,7 +7,7 @@ use Expectation;
 
 /// A parameter for [`tparm`](fn.tparm.html).
 ///
-/// The `params!` macro](../macros.params.html) defines a convenient
+/// The [`params!` macro](macro.params.html) defines a convenient
 /// literal syntax for groups of parameters.
 #[derive(Clone, Debug)]
 pub enum Param {
@@ -50,7 +50,11 @@ impl<'a> Params<'a> {
     }
 }
 
-/// Parameter lists for [`tparm`](fn.tparm.html).
+/// Parameter list syntax for [`tparm`](fn.tparm.html).
+///
+/// For example, `[Param(Int(1)), Param(Int(2)),
+/// Param(Str(b"hello"))]` can be replaced by `params!(1, 2,
+/// b"hello")`.
 #[macro_export]
 macro_rules! params {
     ($($p:expr),* $(,)*) => {{
@@ -97,6 +101,7 @@ where
 pub struct Vars(Vec<Param>);
 
 impl Vars {
+    /// Create an empty set of variables.
     pub fn new() -> Vars {
         Vars(Vec::new())
     }
@@ -222,26 +227,71 @@ impl<'a> CapReader<'a> {
     }
 }
 
-/// Interpolate parameters into a string capability.
+/// Print a string capability, interpolating parameters.
+///
+/// `tparm` accepts up to 9 [`Param`s](enum.Param.html), which can be
+/// provided using the [`params!` macro](macro.params.html). For
+/// example, `params!(1, 255, 255, 0)` could represent the parameters
+/// used with `initc` to set color #1 to yellow.
+///
+/// The 'vars' argument should be the same `Vars` object for all
+/// strings printed to the same terminal.
+///
+/// # Examples
+///
+/// Print red text, given a `Desc` called `desc`:
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate tinf;
+/// # use std::error::Error;
+/// # fn main() {
+/// #     foo();
+/// # }
+/// # fn foo() -> Result<(), Box<Error>> {
+/// # let desc = desc! [
+/// #     setaf => b"\x1b[3%p1%dm",
+/// #     sgr0 => b"\x1b[m"
+/// # ];
+/// # use std::io::Write;
+/// use tinf::cap::{setaf, sgr0};
+/// use tinf::{tparm, Vars};
+///
+/// let stdout = &mut std::io::stdout();
+/// let mut vars = Vars::new();
+/// tparm(stdout, &desc[setaf], &mut params!(1), &mut vars)?;
+/// stdout.write_all(b"Red text!\n");
+/// tparm(stdout, &desc[sgr0], &mut params!(), &mut vars)?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// - writing to `output` might cause an I/O error;
+/// - `capability` might have invalid escape sequences;
+/// - `params` might have too few parameters, or parameters of the
+///    wrong type;
+/// - using different `vars` objects between calls to `tparm` may not
+///   work.
 pub fn tparm(
-    output: &mut Vec<u8>,
-    input: &[u8],
+    output: &mut Write,
+    capability: &[u8],
     params: &mut [Param],
     vars: &mut Vars,
 ) -> Result<(), CapError> {
     use self::Param::*;
 
     let mut params = Params::new(params);
-    let mut cap = CapReader::new(input);
+    let mut cap = CapReader::new(capability);
     let mut stack = ParamStack::new();
-    output.clear();
 
     loop {
         // output literal data
         loop {
             match cap.read() {
                 Some(b'%') => break,
-                Some(c) => output.push(c),
+                Some(c) => output.push(c)?,
                 None => return Ok(()),
             }
         }
@@ -285,15 +335,15 @@ pub fn tparm(
                 // matching ncurses, we permit but ignore flags for
                 // the 'c' specifier
                 match stack.pop_int()? {
-                    0 => output.push(0x80),
-                    i => output.push(i as u8),
+                    0 => output.push(0x80)?,
+                    i => output.push(i as u8)?,
                 }
             }
             fs @ 'd' | fs @ 'o' | fs @ 'x' | fs @ 'X' => {
-                fmt.printf_int(output, fs, stack.pop_int()?);
+                fmt.printf_int(output, fs, stack.pop_int()?)?;
             }
             's' => {
-                fmt.printf_str(output, stack.pop_str()?);
+                fmt.printf_str(output, stack.pop_str()?)?;
             }
             // if/then/else/endif
             '?' | ';' => (),
@@ -398,7 +448,7 @@ pub fn tparm(
             }
             // output literal %
             '%' => {
-                output.push(b'%');
+                output.push(b'%')?;
             }
             // set/get variables
             'P' => {
@@ -412,6 +462,7 @@ pub fn tparm(
     }
 }
 
+// Implements the printf-subset used by terminfo.
 struct Formatter {
     width: u32,
     prec: i32,
@@ -433,7 +484,7 @@ impl Default for Formatter {
     fn default() -> Formatter {
         Formatter {
             width: 0,
-            prec: -1,
+            prec: -1, // -1 means not specified
             align: Align::None,
             alt: false,
             space: false,
@@ -474,9 +525,10 @@ impl Formatter {
         self.spec
     }
 
-    fn printf_int(&self, w: &mut Vec<u8>, fs: char, val: i32) {
+    fn printf_int(&self, w: &mut Write, fs: char, val: i32) -> io::Result<()> {
+        // As per c printf.
         if self.prec == 0 && val == 0 {
-            return;
+            return Ok(());
         }
         let mut output: Vec<u8> = Vec::new();
         if self.alt && (fs == 'o' || fs == 'x' || fs == 'X') {
@@ -505,29 +557,39 @@ impl Formatter {
             }
         }
         output.extend(num);
-        self.printf(w, output);
+        self.printf(w, output)
     }
 
-    fn printf_str(&self, w: &mut Vec<u8>, mut val: Vec<u8>) {
+    fn printf_str(&self, w: &mut Write, mut val: Vec<u8>) -> io::Result<()> {
         if self.prec != -1 {
             val.truncate(self.prec as usize);
         }
-        self.printf(w, val);
+        self.printf(w, val)
     }
 
-    fn printf(&self, w: &mut Vec<u8>, val: Vec<u8>) {
+    fn printf(&self, w: &mut Write, val: Vec<u8>) -> io::Result<()> {
         if self.align == Align::LeftJust {
-            w.extend(val.iter());
+            w.write_all(&val)?;
         }
         for _ in 0..(self.width as i32 - val.len() as i32) {
-            w.push(b' ');
+            w.push(b' ')?;
         }
         if self.align != Align::LeftJust {
-            w.extend(val.iter());
+            w.write_all(&val)?;
         }
+        Ok(())
     }
 }
 
+
+// Utility trait for writing single bytes.
+trait BytePusher: Write {
+    fn push(&mut self, val: u8) -> io::Result<()> {
+        self.write_all(&[val])
+    }
+}
+
+impl<'a> BytePusher for Write + 'a {}
 
 #[derive(Copy, Clone)]
 enum PadState {
@@ -559,6 +621,13 @@ enum NumPart {
 /// equivalent to `w.write_all(cap)`. For modern terminal emulators,
 /// the only capability that requires padding is `flash` (i.e., visual
 /// bell).
+///
+/// # Errors
+///
+/// `tputs` will only return an error if an I/O error occurs while
+/// writing to `output`. There is no such thing as "invalid padding";
+/// anything in a capability that is not a complete and correct
+/// padding specification is printed as-is.
 pub fn tputs(
     output: &mut Write,
     input: &[u8],
@@ -642,8 +711,8 @@ pub fn tputs(
                     }
                     idx += 1;
                     start = idx;
-                    state = Normal;
                 }
+                state = Normal;
             }
         }
     }

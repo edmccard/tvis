@@ -2,7 +2,8 @@
 
 //! Terminfo capability names.
 //!
-//! The names are used as indices into a [`Desc`](../struct.Desc.html).
+//! The names for predefined capbilities are used as indices into a
+//! [`Desc`](../struct.Desc.html).
 //!
 //! [`Boolean`](struct.Boolean.html), [`Number`](struct.Number.html), and
 //! [`String`](struct.String.html) contain the complete list of names
@@ -547,6 +548,17 @@ pub struct Number(pub(super) usize);
 #[derive(Clone, Copy, Debug)]
 pub struct String(pub(super) usize);
 
+/// A name of a user-defined capability.
+#[derive(PartialEq, Clone, Debug)]
+pub struct UserDef(pub(super) StdString);
+
+impl UserDef {
+    /// Creates a `UserDef` from a string.
+    pub fn named<T: AsRef<str>>(name: T) -> UserDef {
+        UserDef(name.as_ref().into())
+    }
+}
+
 impl Boolean {
     /// The `Boolean` capabilitiy name corresponding to the string
     /// `name`.
@@ -605,44 +617,32 @@ impl String {
 }
 
 
-#[derive(Debug)]
-pub(super) enum BoolName {
-    P(Boolean),
-    U(StdString),
+#[derive(Clone, Debug)]
+pub(super) enum CapName {
+    P(usize),
+    U(UserDef),
 }
 
-#[derive(Debug)]
-pub(super) enum NumName {
-    P(Number),
-    U(StdString),
-}
-
-#[derive(Debug)]
-pub(super) enum StrName {
-    P(String),
-    U(StdString),
-}
-
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(super) enum ICap {
-    Bool(BoolName, bool),
-    Num(NumName, u16),
-    Str(StrName, Vec<u8>),
+    Bool(CapName, bool),
+    Num(CapName, u16),
+    Str(CapName, Vec<u8>),
 }
 
-/// A generic capability name and an associated value.
+/// A generic capability name / value pair.
 pub struct Cap(pub(super) ICap);
 
 
 impl From<(Boolean, bool)> for Cap {
     fn from(val: (Boolean, bool)) -> Cap {
-        Cap(ICap::Bool(BoolName::P(val.0), val.1))
+        Cap(ICap::Bool(CapName::P((val.0).0), val.1))
     }
 }
 
 impl From<(Number, u16)> for Cap {
     fn from(val: (Number, u16)) -> Cap {
-        Cap(ICap::Num(NumName::P(val.0), val.1))
+        Cap(ICap::Num(CapName::P((val.0).0), val.1))
     }
 }
 
@@ -651,25 +651,34 @@ where
     V: AsRef<[u8]>,
 {
     fn from(val: (String, V)) -> Cap {
-        Cap(ICap::Str(StrName::P(val.0), (val.1).as_ref().into()))
+        Cap(ICap::Str(CapName::P((val.0).0), (val.1).as_ref().into()))
     }
 }
 
-impl<K: Borrow<str>> From<(K, bool)> for Cap {
+impl<K> From<(K, bool)> for Cap
+where
+    K: Borrow<UserDef>,
+{
     fn from(val: (K, bool)) -> Cap {
-        Cap(ICap::Bool(BoolName::U((val.0).borrow().into()), val.1))
+        Cap(ICap::Bool(CapName::U((val.0).borrow().clone()), val.1))
     }
 }
 
-impl<K: Borrow<str>> From<(K, u16)> for Cap {
+impl<K> From<(K, u16)> for Cap
+where
+    K: Borrow<UserDef>,
+{
     fn from(val: (K, u16)) -> Cap {
-        Cap(ICap::Num(NumName::U((val.0).borrow().into()), val.1))
+        Cap(ICap::Num(CapName::U((val.0).borrow().clone()), val.1))
     }
 }
 
-impl<K: Borrow<str>> From<(K, &'static str)> for Cap {
-    fn from(val: (K, &str)) -> Cap {
-        Cap(ICap::Str(StrName::U((val.0).borrow().into()), (val.1).into()),)
+impl<K> From<(K, &'static str)> for Cap
+where
+    K: Borrow<UserDef>,
+{
+    fn from(val: (K, &'static str)) -> Cap {
+        Cap(ICap::Str(CapName::U((val.0).borrow().clone()), (val.1).into()),)
     }
 }
 

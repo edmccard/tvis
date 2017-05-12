@@ -9,3 +9,7 @@ script:
 matrix:
   allow_failures:
     - rust: stable
+#safelist
+branches:
+  only:
+  - master

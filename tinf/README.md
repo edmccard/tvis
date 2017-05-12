@@ -34,7 +34,7 @@ let mut file = Desc::file("xterm")?;
 let desc = Desc::parse(&mut file)?;
 
 // Send the escape sequence to set foreground to red.
-let stdout = &mut std::io::stdout;
+let stdout = &mut std::io::stdout();
 let mut vars = Vars::new();
 tparm(stdout, &desc[setaf], &mut params!(1), &mut vars)?;
 ```

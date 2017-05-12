@@ -1,12 +1,39 @@
 //! A low-level interface to terminfo databases.
 //!
-//! # Usage
+//! ## Usage
 //!
 //! To find and read terminal descriptions, see
 //! [`Desc`](struct.Desc.html); to send commands to a terminal, see
 //! [`tparm`](fn.tparm.html) and [`tputs`](fn.tputs.html).
 //!
-//! ## Platform Compatibility
+//! ## Examples
+//!
+//! ```no_run
+//! # #[macro_use]
+//! # extern crate tinf;
+//! # fn main() {
+//! #     foo().unwrap();
+//! # }
+//! # fn foo() -> Result<(), Box<std::error::Error>> {
+//! # use std::io::Write;
+//! use tinf::{Desc, tparm, Vars};
+//!
+//! // Find the description for "xterm" in the default locations.
+//! let mut file = Desc::file("xterm")?;
+//!
+//! // Parse it into a `Desc` object.
+//! let desc = Desc::parse(&mut file)?;
+//!
+//! // Send the escape sequence to set foreground to red.
+//! use tinf::cap::setaf;
+//! let stdout = &mut std::io::stdout();
+//! let mut vars = Vars::new();
+//! tparm(stdout, &desc[setaf], &mut params!(1), &mut vars)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Platform Compatibility
 //!
 //! This requires a local terminfo database in directory tree format;
 //! it will not work with a hashed database. In other words, it should

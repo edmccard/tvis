@@ -41,10 +41,10 @@ impl<'a> Params<'a> {
 
     fn make_one_based(&mut self) {
         use self::Param::*;
-        if let Int(i) = self.0[0] {
+        if let Some(&Int(i)) = self.0.get(0) {
             self.0[0] = Int(i + 1);
         }
-        if let Int(i) = self.0[1] {
+        if let Some(&Int(i)) = self.0.get(1) {
             self.0[1] = Int(i + 1);
         }
     }

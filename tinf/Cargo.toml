@@ -1,6 +1,6 @@
 [package]
 name = "tinf"
-version = "0.11.2"
+version = "0.12.0"
 authors = ["Ed McCardell <edmccard@hotmail.com>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/edmccard/tvis"
@@ -10,6 +10,9 @@ A library for using terminfo capabilities.
 
 categories = ["command-line-interface"]
 keywords = ["terminfo", "terminal"]
+
+[dependencies]
+lazy_static = "0.2.8"
 
 [badges]
 travis-ci = { repository = "edmccard/tvis" }

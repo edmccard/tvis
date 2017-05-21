@@ -40,6 +40,9 @@
 //! Just Work on Linux/OSX/Cygwin, but it might not work out of the
 //! box on BSD operating systems.
 
+#[macro_use]
+extern crate lazy_static;
+
 use std::env;
 use std::fs::File;
 use std::io;
@@ -142,14 +145,13 @@ impl Desc {
         let d1 = to_path(env::var("TERMINFO").ok());
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
         let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
-        let d3 = d3.into_iter()
-            .map(
-                |d| if d.as_os_str().is_empty() {
-                    PathBuf::from("/usr/share/terminfo")
-                } else {
-                    d
-                },
-            );
+        let d3 = d3.into_iter().map(
+            |d| if d.as_os_str().is_empty() {
+                PathBuf::from("/usr/share/terminfo")
+            } else {
+                d
+            }
+        );
         let d4 = vec![
             PathBuf::from("/etc/terminfo"),
             PathBuf::from("/lib/terminfo"),
@@ -227,8 +229,15 @@ impl Desc {
                 nums,
                 strings,
                 ext: Desc::parse_user(r)?,
-            },
+            }
         )
+    }
+
+    /// The description for the terminal type from the `TERM`
+    /// environment variable, or the "dumb terminal" description if
+    /// `TERM` is empty.
+    pub fn current() -> &'static Desc {
+        &*CURRENT
     }
 
     // Returns user-defined capabilities, or an empty vector if the
@@ -238,9 +247,9 @@ impl Desc {
         let ext_header = r.read_words(5);
         if let Err(e) = ext_header {
             return match e.kind() {
-                       io::ErrorKind::UnexpectedEof => Ok(Vec::new()),
-                       _ => Err(DescError::from(e)),
-                   };
+                io::ErrorKind::UnexpectedEof => Ok(Vec::new()),
+                _ => Err(DescError::from(e)),
+            };
         }
         let ext_header = ext_header.expected("Ok() ext_header");
 
@@ -260,28 +269,25 @@ impl Desc {
         let mut ext = Vec::new();
         ext_strs.reverse();
         for val in ext_strs {
-            let name =
-                &ext_names
-                     .pop()
-                     .expected("names.len == (strs + nums + bools).len");
+            let name = &ext_names
+                .pop()
+                .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Str(CapName::U(name), val));
         }
         ext_nums.reverse();
         for val in ext_nums {
-            let name =
-                &ext_names
-                     .pop()
-                     .expected("names.len == (strs + nums + bools).len");
+            let name = &ext_names
+                .pop()
+                .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Num(CapName::U(name), val));
         }
         ext_bools.reverse();
         for val in ext_bools {
-            let name =
-                &ext_names
-                     .pop()
-                     .expected("names.len == (strs + nums + bools).len");
+            let name = &ext_names
+                .pop()
+                .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Bool(CapName::U(name), val));
         }
@@ -550,7 +556,7 @@ impl<'a> AlignReader<'a> {
                 io::Error::new(
                     io::ErrorKind::UnexpectedEof,
                     "failed to fill whole buffer",
-                ),
+                )
             );
         }
         self.n += n;
@@ -600,6 +606,28 @@ fn to_paths(var: Option<String>) -> Vec<PathBuf> {
         Some(ref d) if d.is_empty() => Vec::new(),
         Some(d) => env::split_paths(&d).collect(),
     }
+}
+
+
+lazy_static! {
+    static ref CURRENT: Desc = {
+        env::var("TERM")
+            .ok()
+            .and_then(|t| if t.is_empty() { None } else { Some(t) })
+            .and_then(|t| Desc::file(&t).ok())
+            .and_then(|mut f| Desc::parse(&mut f).ok())
+            .unwrap_or(
+                desc![
+                    "dumb", "80-column dumb tty",
+                    cap::am => true,
+                    cap::cols => 80,
+                    cap::bel => "\x07",
+                    cap::cr => "\r",
+                    cap::cud1 => "\n",
+                    cap::ind => "\n",
+                ]
+            )
+    };
 }
 
 

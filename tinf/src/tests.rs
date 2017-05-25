@@ -120,12 +120,7 @@ fn tparm_op_i() {
     assert_eq!(output, b"123233");
     output.clear();
 
-    let _ = tparm(
-        &mut output,
-        b"%i%p1%d",
-        &mut params!(1),
-        &mut Vars::new(),
-    );
+    let _ = tparm(&mut output, b"%i%p1%d", &mut params!(1), &mut Vars::new());
     assert_eq!(output, b"2");
 }
 

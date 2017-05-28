@@ -639,26 +639,20 @@ lazy_static! {
 
     static ref FS_ROOT: PathBuf = {
         if cfg!(target_os = "windows") {
-            cygpath_to_win()
+            let paths = to_paths(env::var("PATH").ok());
+            for p in paths {
+                let p = p.display().to_string();
+                if p.ends_with("\\usr\\local\\bin") {
+                    let (p1, _) = p.split_at(p.len() - 14);
+                    return PathBuf::from(p1);
+                }
+            }
+            PathBuf::new()
         } else {
             PathBuf::from("/")
         }
     };
 }
-
-#[cfg(windows)]
-fn cygpath_to_win() -> PathBuf {
-    let paths = to_paths(env::var("PATH").ok());
-    for p in paths {
-        let p = p.display().to_string();
-        if p.ends_with("\\usr\\local\\bin") {
-            let (p1, _) = p.split_at(p.len() - 14);
-            return PathBuf::from(p1);
-        }
-    }
-    PathBuf::new()
-}
-
 
 /// An error that occurred while finding or parsing a terminal
 /// description.

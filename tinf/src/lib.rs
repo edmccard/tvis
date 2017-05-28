@@ -129,6 +129,10 @@ impl Desc {
     /// This returns an error if `file` could not find and open a
     /// description for `term_name`, or if `term_name` is invalid.
     pub fn file(term_name: &str) -> Result<File, DescError> {
+        fn path_to_root(path: &str) -> PathBuf {
+            FS_ROOT.join(path)
+        }
+
         if term_name.is_empty() {
             return Err(name_error(term_name));
         }
@@ -145,17 +149,18 @@ impl Desc {
         let d1 = to_path(env::var("TERMINFO").ok());
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
         let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
-        let d3 = d3.into_iter().map(
-            |d| if d.as_os_str().is_empty() {
-                PathBuf::from("/usr/share/terminfo")
-            } else {
-                d
-            }
-        );
+        let d3 = d3.into_iter()
+            .map(
+                |d| if d.as_os_str().is_empty() {
+                    path_to_root("usr/share/terminfo")
+                } else {
+                    d
+                }
+            );
         let d4 = vec![
-            PathBuf::from("/etc/terminfo"),
-            PathBuf::from("/lib/terminfo"),
-            PathBuf::from("/usr/share/terminfo"),
+            path_to_root("etc/terminfo"),
+            path_to_root("lib/terminfo"),
+            path_to_root("usr/share/terminfo"),
         ];
         let ds = d1.into_iter()
             .chain(d2.into_iter())
@@ -247,9 +252,9 @@ impl Desc {
         let ext_header = r.read_words(5);
         if let Err(e) = ext_header {
             return match e.kind() {
-                io::ErrorKind::UnexpectedEof => Ok(Vec::new()),
-                _ => Err(DescError::from(e)),
-            };
+                       io::ErrorKind::UnexpectedEof => Ok(Vec::new()),
+                       _ => Err(DescError::from(e)),
+                   };
         }
         let ext_header = ext_header.expected("Ok() ext_header");
 
@@ -269,25 +274,28 @@ impl Desc {
         let mut ext = Vec::new();
         ext_strs.reverse();
         for val in ext_strs {
-            let name = &ext_names
-                .pop()
-                .expected("names.len == (strs + nums + bools).len");
+            let name =
+                &ext_names
+                     .pop()
+                     .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Str(CapName::U(name), val));
         }
         ext_nums.reverse();
         for val in ext_nums {
-            let name = &ext_names
-                .pop()
-                .expected("names.len == (strs + nums + bools).len");
+            let name =
+                &ext_names
+                     .pop()
+                     .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Num(CapName::U(name), val));
         }
         ext_bools.reverse();
         for val in ext_bools {
-            let name = &ext_names
-                .pop()
-                .expected("names.len == (strs + nums + bools).len");
+            let name =
+                &ext_names
+                     .pop()
+                     .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Bool(CapName::U(name), val));
         }
@@ -628,6 +636,27 @@ lazy_static! {
                 ]
             )
     };
+
+    static ref FS_ROOT: PathBuf = {
+        if cfg!(target_os = "windows") {
+            cygpath_to_win()
+        } else {
+            PathBuf::from("/")
+        }
+    };
+}
+
+#[cfg(windows)]
+fn cygpath_to_win() -> PathBuf {
+    let paths = to_paths(env::var("PATH").ok());
+    for p in paths {
+        let p = p.display().to_string();
+        if p.ends_with("\\usr\\local\\bin") {
+            let (p1, _) = p.split_at(p.len() - 14);
+            return PathBuf::from(p1);
+        }
+    }
+    PathBuf::new()
 }
 
 

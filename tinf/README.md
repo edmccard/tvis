@@ -13,7 +13,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tinf = "0.12.0"
+tinf = "0.12.1"
 ```
 
 and this to your crate root:

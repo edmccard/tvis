@@ -1,8 +1,12 @@
 use std::io;
 use tinf::Desc;
 use {terminal_mode, Color, Handle, LockableStream, Result, Stream,
-     TerminalMode, UseColor};
+     TerminalMode, DoStyle};
 
+/// A styled stream using terminfo escape sequences.
+///
+/// Instances are lightweight, using only three escape sequences
+/// (instead of copying entire terminfo descriptions).
 pub struct TermStream<T> {
     cap_reset: Vec<u8>,
     cap_fg: Vec<u8>,
@@ -11,8 +15,11 @@ pub struct TermStream<T> {
 }
 
 impl TermStream<io::Stdout> {
-    pub fn stdout(use_color: UseColor) -> TermStream<io::Stdout> {
-        TermStream::std(Handle::Stdout, io::stdout(), use_color)
+    /// A `TermStream` that wraps `std::io::stdout()`, using the
+    /// current terminal description.
+    pub fn stdout(do_style: DoStyle) -> TermStream<io::Stdout> {
+        let mode = terminal_mode(Handle::Stdout);
+        TermStream::std(mode, io::stdout(), do_style)
     }
 }
 
@@ -30,8 +37,11 @@ impl LockableStream for TermStream<io::Stdout> {
 }
 
 impl TermStream<io::Stderr> {
-    pub fn stderr(use_color: UseColor) -> TermStream<io::Stderr> {
-        TermStream::std(Handle::Stderr, io::stderr(), use_color)
+    /// A `TermStream` that wraps `std::io::stderr()`, using the
+    /// current terminal description.
+    pub fn stderr(do_style: DoStyle) -> TermStream<io::Stderr> {
+        let mode = terminal_mode(Handle::Stderr);
+        TermStream::std(mode, io::stderr(), do_style)
     }
 }
 
@@ -48,11 +58,16 @@ impl LockableStream for TermStream<io::Stderr> {
 }
 
 impl<T: io::Write> TermStream<T> {
-    pub fn new(w: T, desc: &Desc, color: bool) -> TermStream<T> {
+    /// Create a `TermStream` that wraps a `std::io::Write`, using the
+    /// terminfo description given by `desc`.
+    ///
+    /// If `do_style` is false, or `desc[sgr0]` is empty, the `Stream`
+    /// methods (`reset`, `fg`, and `em`) will have no effect.
+    pub fn new(w: T, desc: &Desc, do_style: bool) -> TermStream<T> {
         use tinf::cap;
 
-        let color = color && !desc[cap::sgr0].is_empty();
-        match color {
+        let do_style = do_style && !desc[cap::sgr0].is_empty();
+        match do_style {
             true => {
                 TermStream {
                     cap_reset: desc[cap::sgr0].to_vec(),
@@ -65,16 +80,28 @@ impl<T: io::Write> TermStream<T> {
         }
     }
 
-    fn std(handle: Handle, w: T, use_color: UseColor) -> TermStream<T> {
+    pub(super) fn std(
+        mode: TerminalMode,
+        w: T,
+        do_style: DoStyle,
+    ) -> TermStream<T> {
         use self::TerminalMode::*;
-        use self::UseColor::*;
+        use self::DoStyle::*;
 
-        match terminal_mode(handle) {
-            None => TermStream::init(w),
-            Redir => TermStream::new(w, Desc::current(), use_color == Always),
-            Term => TermStream::new(w, Desc::current(), use_color != Never),
+        match mode {
             #[cfg(windows)]
-            Win10 => unimplemented!(),
+            None => TermStream::init(w),
+            Redir => TermStream::new(w, Desc::current(), do_style == Always),
+            Term => TermStream::new(w, Desc::current(), do_style != Never),
+            #[cfg(windows)]
+            Console => TermStream::init(w),
+            #[cfg(windows)]
+            Win10 => TermStream {
+                cap_reset: b"\x1b[0m".to_vec(),
+                cap_fg: b"\x1b[3%p1%dm".to_vec(),
+                cap_em: b"\x1b[1m".to_vec(),
+                w,
+            }
         }
 
     }
@@ -99,11 +126,17 @@ impl<T: io::Write> io::Write for TermStream<T> {
     }
 }
 
+/// The `Stream` methods of this implementation may return
+/// an`Err(`[`Error`](struct.Error.html)`)` if there is an I/O error
+/// writing to the wrapped stream, or if the `TermStream` object was
+/// created from a broken terminfo description with invalid escape
+/// sequences.
 impl<T: io::Write> Stream for TermStream<T> {
     // Note that vars is not persistent between calls to tparm; for
-    // the capabilities we use, this is fine unless you are using
+    // the escape sequences we use, this is fine unless you are using
     // certain ancient terminals made by Data General or Wyse.
 
+    /// Sends the `sgr0` escape sequence.
     fn reset(&mut self) -> Result<()> {
         ::tinf::tparm(
             &mut self.w,
@@ -114,6 +147,7 @@ impl<T: io::Write> Stream for TermStream<T> {
         Ok(())
     }
 
+    /// Sends the `setaf` escape sequence.
     fn fg(&mut self, fg: Color) -> Result<()> {
         ::tinf::tparm(
             &mut self.w,
@@ -124,6 +158,8 @@ impl<T: io::Write> Stream for TermStream<T> {
         Ok(())
     }
 
+    /// Sends the `bold`, `smul`, or `smso` escape sequence (depending
+    /// on which is supported by the terminfo description).
     fn em(&mut self) -> Result<()> {
         ::tinf::tparm(
             &mut self.w,

@@ -3,9 +3,10 @@
 use std::io::{self, Write};
 
 use win32;
-use {Color, ConsoleMode, Handle, LockableStream, Result, Stream, UseColor};
+use {Color, ConsoleMode, Handle, LockableStream, Result, Stream, DoStyle};
 
 
+/// A styled stream using the Windows Console API.
 pub struct ConStream<T> {
     w: T,
     hndl: win32::Handle,
@@ -14,22 +15,24 @@ pub struct ConStream<T> {
 }
 
 impl ConStream<io::Stdout> {
-    pub fn stdout(use_color: UseColor) -> ConStream<io::Stdout> {
-        ConStream::init(io::stdout(), Handle::Stdout, use_color)
+    /// A `ConStream` that wraps `std::io::stdout()`.
+    pub fn stdout(do_style: DoStyle) -> ConStream<io::Stdout> {
+        ConStream::init(io::stdout(), Handle::Stdout, do_style)
     }
 }
 
 impl ConStream<io::Stderr> {
-    pub fn stderr(use_color: UseColor) -> ConStream<io::Stderr> {
-        ConStream::init(io::stderr(), Handle::Stderr, use_color)
+    /// A `ConStream` that wraps `std::io::stderr()`.
+    pub fn stderr(do_style: DoStyle) -> ConStream<io::Stderr> {
+        ConStream::init(io::stderr(), Handle::Stderr, do_style)
     }
 }
 
 impl<T: Write> ConStream<T> {
-    fn init(w: T, handle: Handle, use_color: UseColor) -> ConStream<T> {
+    fn init(w: T, handle: Handle, do_style: DoStyle) -> ConStream<T> {
         let hndl = unsafe { win32::GetStdHandle(handle as u32) };
         let is_atty = super::console_mode(hndl) != ConsoleMode::None;
-        let do_style = is_atty && (use_color != UseColor::Never);
+        let do_style = is_atty && (do_style != DoStyle::Never);
         let orig_pair = match do_style {
             true => *ORIG_PAIR,
             false => (7, 0),

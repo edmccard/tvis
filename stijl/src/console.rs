@@ -1,9 +1,10 @@
 #![cfg(windows)]
 
 use std::io::{self, Write};
+use tvis_util::{Handle, ConsoleMode};
 
 use win32;
-use {Color, ConsoleMode, Handle, LockableStream, Result, Stream, DoStyle};
+use {Color, LockableStream, Result, Stream, DoStyle};
 
 
 /// A styled stream using the Windows Console API.
@@ -31,7 +32,7 @@ impl ConStream<io::Stderr> {
 impl<T: Write> ConStream<T> {
     fn init(w: T, handle: Handle, do_style: DoStyle) -> ConStream<T> {
         let hndl = unsafe { win32::GetStdHandle(handle as u32) };
-        let is_atty = super::console_mode(hndl) != ConsoleMode::None;
+        let is_atty = handle.console_mode() != ConsoleMode::None;
         let do_style = is_atty && (do_style != DoStyle::Never);
         let orig_pair = match do_style {
             true => *ORIG_PAIR,
@@ -193,7 +194,7 @@ fn set_colors(hndl: win32::Handle, clrs: CPair) {
 lazy_static! {
     static ref ORIG_PAIR: CPair = {
         let hndl = unsafe { win32::GetStdHandle(Handle::Stdout as u32) };
-        match super::console_mode(hndl) {
+        match Handle::Stdout.console_mode() {
             ConsoleMode::None => (7, 0),
             _ => get_colors(hndl),
         }

@@ -1,7 +1,7 @@
 use std::io;
 use tinf::Desc;
-use {terminal_mode, Color, Handle, LockableStream, Result, Stream,
-     TerminalMode, DoStyle};
+use tvis_util::{Handle, TerminalMode};
+use {Color, LockableStream, Result, Stream, DoStyle};
 
 /// A styled stream using terminfo escape sequences.
 ///
@@ -18,7 +18,7 @@ impl TermStream<io::Stdout> {
     /// A `TermStream` that wraps `std::io::stdout()`, using the
     /// current terminal description.
     pub fn stdout(do_style: DoStyle) -> TermStream<io::Stdout> {
-        let mode = terminal_mode(Handle::Stdout);
+        let mode = Handle::Stdout.terminal_mode();
         TermStream::std(mode, io::stdout(), do_style)
     }
 }
@@ -40,7 +40,7 @@ impl TermStream<io::Stderr> {
     /// A `TermStream` that wraps `std::io::stderr()`, using the
     /// current terminal description.
     pub fn stderr(do_style: DoStyle) -> TermStream<io::Stderr> {
-        let mode = terminal_mode(Handle::Stderr);
+        let mode = Handle::Stderr.terminal_mode();
         TermStream::std(mode, io::stderr(), do_style)
     }
 }
@@ -96,11 +96,13 @@ impl<T: io::Write> TermStream<T> {
             #[cfg(windows)]
             Console => TermStream::init(w),
             #[cfg(windows)]
-            Win10 => TermStream {
-                cap_reset: b"\x1b[0m".to_vec(),
-                cap_fg: b"\x1b[3%p1%dm".to_vec(),
-                cap_em: b"\x1b[1m".to_vec(),
-                w,
+            Win10 => {
+                TermStream {
+                    cap_reset: b"\x1b[0m".to_vec(),
+                    cap_fg: b"\x1b[3%p1%dm".to_vec(),
+                    cap_em: b"\x1b[1m".to_vec(),
+                    w,
+                }
             }
         }
 

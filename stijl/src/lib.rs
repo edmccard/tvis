@@ -69,12 +69,17 @@
 #![cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 #![cfg_attr(feature = "cargo-clippy", allow(match_bool))]
 
+extern crate libc;
+extern crate tvis_util;
 #[macro_use]
 extern crate tinf;
 #[macro_use]
 extern crate lazy_static;
 
 use std::{error, fmt, io};
+use tvis_util::Handle;
+#[cfg(windows)]
+use tvis_util::TerminalMode;
 
 #[cfg(windows)]
 mod win32;
@@ -91,30 +96,22 @@ pub use self::term::TermStream;
 
 /// A [`LockableStream`](trait.LockableStream.html) wrapping `stdout`.
 pub fn stdout(do_style: DoStyle) -> Box<LockableStream> {
-    match terminal_mode(Handle::Stdout) {
+    match Handle::Stdout.terminal_mode() {
         #[cfg(windows)]
-        TerminalMode::Console => Box::new(ConStream::stdout(do_style)),
+        Console => Box::new(ConStream::stdout(do_style)),
         mode => Box::new(TermStream::std(mode, io::stdout(), do_style)),
     }
 }
 
 /// A [`LockableStream`](trait.LockableStrem.html) wrapping `stderr`.
 pub fn stderr(do_style: DoStyle) -> Box<LockableStream> {
-    match terminal_mode(Handle::Stdout) {
+    match Handle::Stderr.terminal_mode() {
         #[cfg(windows)]
         TerminalMode::Console => Box::new(ConStream::stderr(do_style)),
         mode => Box::new(TermStream::std(mode, io::stderr(), do_style)),
     }
 }
 
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-enum Handle {
-    //Stdin = 0xfffffff6,
-    Stdout = 0xfffffff5,
-    Stderr = 0xfffffff4,
-}
 
 /// Strategies for applying styles to standard output streams.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -235,122 +232,5 @@ impl error::Error for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 
-// Based on https://github.com/dtolnay/isatty.
-
-enum TerminalMode {
-    #[cfg(windows)]
-    None,
-    Redir,
-    Term,
-    #[cfg(windows)]
-    Console,
-    #[cfg(windows)]
-    Win10,
-}
-
-#[cfg(not(windows))]
-fn terminal_mode(handle: Handle) -> TerminalMode {
-    extern crate libc;
-
-    let handle = match handle {
-        Handle::Stdout => libc::STDOUT_FILENO,
-        Handle::Stderr => libc::STDERR_FILENO,
-    };
-    match unsafe { libc::isatty(handle) } {
-        0 => TerminalMode::Redir,
-        _ => TerminalMode::Term,
-    }
-}
-
-#[cfg(windows)]
-fn terminal_mode(handle: Handle) -> TerminalMode {
-    use win32;
-
-    let hndl = unsafe { win32::GetStdHandle(handle as u32) };
-    match console_mode(hndl) {
-        ConsoleMode::Default => return TerminalMode::Console,
-        ConsoleMode::VT => return TerminalMode::Win10,
-        ConsoleMode::None => (),
-    }
-
-    match msys_cygwin(hndl) {
-        None => TerminalMode::None,
-        Some(true) => TerminalMode::Term,
-        Some(false) => TerminalMode::Redir,
-    }
-}
-
-// Assumes console_mode(hndl) has already returned None.
-#[cfg(windows)]
-fn msys_cygwin(hndl: ::win32::Handle) -> Option<bool> {
-    use std::os::windows::ffi::OsStringExt;
-
-    let sz = ::std::mem::size_of::<win32::FileNameInfo>();
-    let mut raw_info = vec![0u8; sz + win32::MAX_PATH];
-
-    let ok = unsafe {
-        ::win32::GetFileInformationByHandleEx(
-            hndl,
-            2,
-            raw_info.as_mut_ptr() as *mut win32::Void,
-            raw_info.len() as u32,
-        )
-    };
-    if ok == 0 {
-        return None;
-    }
-
-    let file_info =
-        unsafe { *(raw_info[0..sz].as_ptr() as *const win32::FileNameInfo) };
-    let name = &raw_info[sz..sz + file_info.file_name_length as usize];
-    let name = unsafe {
-        ::std::slice::from_raw_parts(
-            name.as_ptr() as *const win32::WChar,
-            name.len() / 2,
-        )
-    };
-    let name = ::std::ffi::OsString::from_wide(name);
-    let name = name.to_string_lossy();
-
-    if name.starts_with("\\cygwin-") || name.starts_with("\\msys-") {
-        Some(true)
-    } else {
-        Some(false)
-    }
-}
-
-#[cfg(windows)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ConsoleMode {
-    None,
-    Default,
-    VT,
-}
-
-#[cfg(windows)]
-fn console_mode(hndl: ::win32::Handle) -> ConsoleMode {
-    use win32;
-
-    if hndl == win32::INVALID_HANDLE_VALUE {
-        return ConsoleMode::None;
-    }
-    unsafe {
-        let mut mode: u32 = 0;
-        if 0 == win32::GetConsoleMode(hndl, &mut mode) {
-            return ConsoleMode::None;
-        }
-        if (mode & win32::ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0 {
-            return ConsoleMode::VT;
-        }
-        mode |= win32::ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        if 0 == win32::SetConsoleMode(hndl, mode) {
-            ConsoleMode::Default
-        } else {
-            ConsoleMode::VT
-        }
-    }
-}
-
 // Silences warning
-lazy_static! {
-}
+lazy_static!{}

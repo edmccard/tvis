@@ -98,7 +98,7 @@ pub use self::term::TermStream;
 pub fn stdout(do_style: DoStyle) -> Box<LockableStream> {
     match Handle::Stdout.terminal_mode() {
         #[cfg(windows)]
-        Console => Box::new(ConStream::stdout(do_style)),
+        TerminalMode::Console => Box::new(ConStream::stdout(do_style)),
         mode => Box::new(TermStream::std(mode, io::stdout(), do_style)),
     }
 }

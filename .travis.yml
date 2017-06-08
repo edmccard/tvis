@@ -6,9 +6,6 @@ rust:
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
-matrix:
-  allow_failures:
-    - rust: stable
 #safelist
 branches:
   only:

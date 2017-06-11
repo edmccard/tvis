@@ -8,13 +8,13 @@ use win32;
 /// The type of terminal, if any, for a standard stream handle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TerminalMode {
-    /// An error occurred while checking the mode.
-    #[cfg(windows)]
-    None,
     /// Not connected to a terminal or console.
     Redir,
-    /// A terminal (on Windows, a Cygwin/MSYS shell).
+    /// A terminal emulator.
     Term,
+    /// A Cygwin or MSYS2 terminal.
+    #[cfg(windows)]
+    Cygwin,
     /// A legacy console buffer.
     #[cfg(windows)]
     Console,
@@ -27,12 +27,7 @@ pub enum TerminalMode {
 impl TerminalMode {
     #[cfg(not(windows))]
     pub(super) fn from_handle(handle: Handle) -> TerminalMode {
-        let handle = match handle {
-            Handle::Stdin => libc::STDIN_FILENO,
-            Handle::Stdout => libc::STDOUT_FILENO,
-            Handle::Stderr => libc::STDERR_FILENO,
-        };
-        match unsafe { libc::isatty(handle) } {
+        match unsafe { libc::isatty(handle.fd()) } {
             0 => TerminalMode::Redir,
             _ => TerminalMode::Term,
         }
@@ -50,9 +45,8 @@ impl TerminalMode {
 
         let hndl = unsafe { win32::GetStdHandle(handle as u32) };
         match msys_cygwin(hndl) {
-            None => TerminalMode::None,
-            Some(true) => TerminalMode::Term,
-            Some(false) => TerminalMode::Redir,
+            Some(true) => TerminalMode::Cygwin,
+            _ => TerminalMode::Redir,
         }
     }
 }

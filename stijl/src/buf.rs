@@ -86,4 +86,9 @@ impl Stream for BufStream {
         self.actions.push(Action::Em);
         Ok(())
     }
+
+    /// Always false.
+    fn is_cli(&self) -> bool {
+        false
+    }
 }

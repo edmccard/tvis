@@ -4,8 +4,8 @@
 //!
 //! [`stdout()`](fn.stdout.html) and [`stderr()`](fn.stderr.html) are
 //! drop-in replacements for `std::io::stdout()` and
-//! `std::io::stderr()`, that wrap them in a
-//! [`Stream`](trait.Stream.html) which supports eight foreground
+//! `std::io::stderr()`, which wrap them in a
+//! [`Stream`](trait.Stream.html) that supports eight foreground
 //! colors and emphasized text.
 //!
 //! ### Example
@@ -103,7 +103,7 @@ pub fn stdout(do_style: DoStyle) -> Box<LockableStream> {
     }
 }
 
-/// A [`LockableStream`](trait.LockableStrem.html) wrapping `stderr`.
+/// A [`LockableStream`](trait.LockableStream.html) wrapping `stderr`.
 pub fn stderr(do_style: DoStyle) -> Box<LockableStream> {
     match Handle::Stderr.terminal_mode() {
         #[cfg(windows)]
@@ -157,6 +157,8 @@ pub trait Stream: io::Write {
     fn fg(&mut self, fg: Color) -> Result<()>;
     /// Begin emphasized text.
     fn em(&mut self) -> Result<()>;
+    /// True if the stream is connected to a command-line interface.
+    fn is_cli(&self) -> bool;
 }
 
 impl<'a> Stream for Box<Stream + 'a> {
@@ -170,6 +172,10 @@ impl<'a> Stream for Box<Stream + 'a> {
 
     fn em(&mut self) -> Result<()> {
         (**self).em()
+    }
+
+    fn is_cli(&self) -> bool {
+        (**self).is_cli()
     }
 }
 
@@ -190,6 +196,10 @@ impl Stream for Box<LockableStream> {
 
     fn em(&mut self) -> Result<()> {
         (**self).em()
+    }
+
+    fn is_cli(&self) -> bool {
+        (**self).is_cli()
     }
 }
 

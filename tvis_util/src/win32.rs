@@ -18,9 +18,39 @@ pub struct FileNameInfo {
     pub file_name: [WChar; 0],
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Default)]
+pub struct Coord {
+    x: i16,
+    y: i16,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Default)]
+pub struct ConsoleScreenBufferInfo {
+    pub size: Coord,
+    pub cursor_position: Coord,
+    pub attributes: u16,
+    pub window: SmallRect,
+    pub maximum_window_size: Coord,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Default)]
+pub struct SmallRect {
+    pub left: i16,
+    pub top: i16,
+    pub right: i16,
+    pub bottom: i16,
+}
+
 #[cfg_attr(rustfmt, rustfmt_skip)]
 extern "system" {
     pub fn GetConsoleMode(console_handle: Handle, mode: *mut u32) -> Bool;
+    pub fn GetConsoleScreenBufferInfo(
+        console_output: Handle,
+        console_screen_buffer_info: *mut ConsoleScreenBufferInfo,
+    ) -> Bool;
     pub fn GetFileInformationByHandleEx(
         file: Handle,
         file_information_class: i32,

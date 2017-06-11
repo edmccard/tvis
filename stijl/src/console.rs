@@ -101,31 +101,9 @@ impl Stream for ConStream<io::Stdout> {
         let _ = self.w.lock();
         self.em()
     }
-}
 
-impl LockableStream for ConStream<io::Stdout> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
-        let locked = ConStream {
-            w: self.w.lock(),
-            hndl: self.hndl,
-            orig_pair: self.orig_pair,
-            do_style: self.do_style,
-        };
-        Box::new(locked)
-    }
-}
-
-impl<'a> Stream for ConStream<io::StdoutLock<'a>> {
-    fn reset(&mut self) -> Result<()> {
-        self.reset()
-    }
-
-    fn fg(&mut self, fg: Color) -> Result<()> {
-        self.fg(fg)
-    }
-
-    fn em(&mut self) -> Result<()> {
-        self.em()
+    fn is_cli(&self) -> bool {
+        true
     }
 }
 
@@ -144,17 +122,27 @@ impl Stream for ConStream<io::Stderr> {
         let _ = self.w.lock();
         self.em()
     }
+
+    fn is_cli(&self) -> bool {
+        true
+    }
 }
 
-impl LockableStream for ConStream<io::Stderr> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
-        let locked = ConStream {
-            w: self.w.lock(),
-            hndl: self.hndl,
-            orig_pair: self.orig_pair,
-            do_style: self.do_style,
-        };
-        Box::new(locked)
+impl<'a> Stream for ConStream<io::StdoutLock<'a>> {
+    fn reset(&mut self) -> Result<()> {
+        self.reset()
+    }
+
+    fn fg(&mut self, fg: Color) -> Result<()> {
+        self.fg(fg)
+    }
+
+    fn em(&mut self) -> Result<()> {
+        self.em()
+    }
+
+    fn is_cli(&self) -> bool {
+        true
     }
 }
 
@@ -169,6 +157,34 @@ impl<'a> Stream for ConStream<io::StderrLock<'a>> {
 
     fn em(&mut self) -> Result<()> {
         self.em()
+    }
+
+    fn is_cli(&self) -> bool {
+        true
+    }
+}
+
+impl LockableStream for ConStream<io::Stdout> {
+    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+        let locked = ConStream {
+            w: self.w.lock(),
+            hndl: self.hndl,
+            orig_pair: self.orig_pair,
+            do_style: self.do_style,
+        };
+        Box::new(locked)
+    }
+}
+
+impl LockableStream for ConStream<io::Stderr> {
+    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+        let locked = ConStream {
+            w: self.w.lock(),
+            hndl: self.hndl,
+            orig_pair: self.orig_pair,
+            do_style: self.do_style,
+        };
+        Box::new(locked)
     }
 }
 

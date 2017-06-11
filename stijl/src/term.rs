@@ -12,6 +12,7 @@ pub struct TermStream<T> {
     cap_fg: Vec<u8>,
     cap_em: Vec<u8>,
     w: T,
+    is_cli: bool,
 }
 
 impl TermStream<io::Stdout> {
@@ -20,19 +21,6 @@ impl TermStream<io::Stdout> {
     pub fn stdout(do_style: DoStyle) -> TermStream<io::Stdout> {
         let mode = Handle::Stdout.terminal_mode();
         TermStream::std(mode, io::stdout(), do_style)
-    }
-}
-
-// Thanks to /u/cbreeden for help with lifetimes.
-impl LockableStream for TermStream<io::Stdout> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
-        let locked = TermStream {
-            cap_reset: self.cap_reset.clone(),
-            cap_fg: self.cap_fg.clone(),
-            cap_em: self.cap_em.clone(),
-            w: self.w.lock(),
-        };
-        Box::new(locked)
     }
 }
 
@@ -45,6 +33,20 @@ impl TermStream<io::Stderr> {
     }
 }
 
+// Thanks to /u/cbreeden for help with lifetimes.
+impl LockableStream for TermStream<io::Stdout> {
+    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+        let locked = TermStream {
+            cap_reset: self.cap_reset.clone(),
+            cap_fg: self.cap_fg.clone(),
+            cap_em: self.cap_em.clone(),
+            w: self.w.lock(),
+            is_cli: self.is_cli,
+        };
+        Box::new(locked)
+    }
+}
+
 impl LockableStream for TermStream<io::Stderr> {
     fn lock<'a>(&'a self) -> Box<Stream + 'a> {
         let locked = TermStream {
@@ -52,6 +54,7 @@ impl LockableStream for TermStream<io::Stderr> {
             cap_fg: self.cap_fg.clone(),
             cap_em: self.cap_em.clone(),
             w: self.w.lock(),
+            is_cli: self.is_cli,
         };
         Box::new(locked)
     }
@@ -63,7 +66,12 @@ impl<T: io::Write> TermStream<T> {
     ///
     /// If `do_style` is false, or `desc[sgr0]` is empty, the `Stream`
     /// methods (`reset`, `fg`, and `em`) will have no effect.
-    pub fn new(w: T, desc: &Desc, do_style: bool) -> TermStream<T> {
+    pub fn new(
+        w: T,
+        desc: &Desc,
+        do_style: bool,
+        is_cli: bool,
+    ) -> TermStream<T> {
         use tinf::cap;
 
         let do_style = do_style && !desc[cap::sgr0].is_empty();
@@ -74,6 +82,7 @@ impl<T: io::Write> TermStream<T> {
                     cap_fg: desc[cap::setaf].to_vec(),
                     cap_em: get_em(desc),
                     w,
+                    is_cli,
                 }
             }
             false => TermStream::init(w),
@@ -89,10 +98,16 @@ impl<T: io::Write> TermStream<T> {
         use self::DoStyle::*;
 
         match mode {
+            Redir => {
+                TermStream::new(w, Desc::current(), do_style == Always, false)
+            }
+            Term => {
+                TermStream::new(w, Desc::current(), do_style != Never, true)
+            }
             #[cfg(windows)]
-            None => TermStream::init(w),
-            Redir => TermStream::new(w, Desc::current(), do_style == Always),
-            Term => TermStream::new(w, Desc::current(), do_style != Never),
+            Cygwin => {
+                TermStream::new(w, Desc::current(), do_style != Never, true)
+            }
             #[cfg(windows)]
             Console => TermStream::init(w),
             #[cfg(windows)]
@@ -102,6 +117,7 @@ impl<T: io::Write> TermStream<T> {
                     cap_fg: b"\x1b[3%p1%dm".to_vec(),
                     cap_em: b"\x1b[1m".to_vec(),
                     w,
+                    is_cli: true,
                 }
             }
         }
@@ -114,6 +130,7 @@ impl<T: io::Write> TermStream<T> {
             cap_fg: Vec::new(),
             cap_em: Vec::new(),
             w,
+            is_cli: false,
         }
     }
 }
@@ -170,6 +187,10 @@ impl<T: io::Write> Stream for TermStream<T> {
             &mut ::tinf::Vars::new(),
         )?;
         Ok(())
+    }
+
+    fn is_cli(&self) -> bool {
+        self.is_cli
     }
 }
 

@@ -5,14 +5,15 @@
 //! [`stdout()`](fn.stdout.html) and [`stderr()`](fn.stderr.html) are
 //! drop-in replacements for `std::io::stdout()` and
 //! `std::io::stderr()`, which wrap them in a
-//! [`Stream`](trait.Stream.html) that supports eight foreground
-//! colors and emphasized text.
+//! [`CLIStream`](trait.CLIStream.html) that supports eight foreground
+//! colors and emphasized text). The `CLIStream` can also "rewind" to
+//! overwrite previous lines.
 //!
 //! ### Example
 //!
 //! ```rust
 //! use std::io::Write;
-//! use stijl::{Stream, DoStyle, Red};
+//! use stijl::{CLIStream, DoStyle, Red};
 //!
 //! # fn main() {
 //! #     foo().unwrap();
@@ -78,8 +79,8 @@ extern crate lazy_static;
 
 use std::{error, fmt, io};
 use tvis_util::Handle;
-#[cfg(windows)]
-use tvis_util::TerminalMode;
+pub use tvis_util::TerminalMode;
+pub use tvis_util::size::WinSize;
 
 #[cfg(windows)]
 mod win32;
@@ -161,7 +162,20 @@ pub trait Stream: io::Write {
     fn is_cli(&self) -> bool;
 }
 
-impl<'a> Stream for Box<Stream + 'a> {
+/// A `Stream` connected to a command-line interface.
+pub trait CLIStream: Stream {
+    /// "Rewind" the stream so that the last `count` lines can be
+    /// overwritten.
+    ///
+    /// Panics if the `Stream`s mode is `TerminalMode::Redir`.
+    fn rewind_lines(&mut self, count: u16) -> Result<()>;
+    /// The size of the command-line window.
+    ///
+    /// Panics if the `Stream`s mode is `TerminalMode::Redir`.
+    fn get_size(&self) -> WinSize;
+}
+
+impl<'a> Stream for Box<CLIStream + 'a> {
     fn reset(&mut self) -> Result<()> {
         (**self).reset()
     }
@@ -179,10 +193,20 @@ impl<'a> Stream for Box<Stream + 'a> {
     }
 }
 
+impl<'a> CLIStream for Box<CLIStream + 'a> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        (**self).rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        (**self).get_size()
+    }
+}
+
 /// A [`Stream`](trait.Stream.html) with synchronized access.
-pub trait LockableStream: Stream {
+pub trait LockableStream: CLIStream {
     /// Lock the stream, returning a writable guard.
-    fn lock<'a>(&'a self) -> Box<Stream + 'a>;
+    fn lock<'a>(&'a self) -> Box<CLIStream + 'a>;
 }
 
 impl Stream for Box<LockableStream> {
@@ -200,6 +224,16 @@ impl Stream for Box<LockableStream> {
 
     fn is_cli(&self) -> bool {
         (**self).is_cli()
+    }
+}
+
+impl CLIStream for Box<LockableStream> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        (**self).rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        (**self).get_size()
     }
 }
 

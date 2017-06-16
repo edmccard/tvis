@@ -2,9 +2,9 @@
 
 use std::io::{self, Write};
 use tvis_util::{Handle, ConsoleMode};
-
+use tvis_util::size;
 use win32;
-use {Color, LockableStream, Result, Stream, DoStyle};
+use {Color, LockableStream, Result, CLIStream, Stream, DoStyle, WinSize};
 
 
 /// A styled stream using the Windows Console API.
@@ -12,6 +12,7 @@ pub struct ConStream<T> {
     w: T,
     hndl: win32::Handle,
     orig_pair: CPair,
+    defsz: WinSize,
     do_style: bool,
 }
 
@@ -42,6 +43,7 @@ impl<T: Write> ConStream<T> {
             w,
             hndl,
             orig_pair,
+            defsz: size::get_default_console_size(),
             do_style,
         }
     }
@@ -73,6 +75,32 @@ impl<T: Write> ConStream<T> {
             set_colors(self.hndl, (fg, cur.1));
         }
         Ok(())
+    }
+
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        let mut csbi: win32::ConsoleScreenBufferInfo = Default::default();
+        unsafe {
+            win32::GetConsoleScreenBufferInfo(self.hndl, &mut csbi);
+        }
+        self.flush()?;
+        let mut coord = csbi.cursor_position;
+        if count > 0 {
+            coord.x = 0;
+        }
+        if count > 1 {
+            coord.y -= ::std::cmp::min(count - 1, coord.y as u16) as i16;
+        }
+        unsafe {
+            win32::SetConsoleCursorPosition(self.hndl, coord);
+        }
+        Ok(())
+    }
+
+    fn get_size(&self, handle: Handle) -> WinSize {
+        match size::get_size(handle) {
+            Some(sz) => sz,
+            None => self.defsz,
+        }
     }
 }
 
@@ -164,12 +192,55 @@ impl<'a> Stream for ConStream<io::StderrLock<'a>> {
     }
 }
 
+impl CLIStream for ConStream<io::Stdout> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        let _ = self.w.lock();
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        self.get_size(Handle::Stdout)
+    }
+}
+
+impl CLIStream for ConStream<io::Stderr> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        let _ = self.w.lock();
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        self.get_size(Handle::Stderr)
+    }
+}
+
+impl<'a> CLIStream for ConStream<io::StdoutLock<'a>> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        self.get_size(Handle::Stdout)
+    }
+}
+
+impl<'a> CLIStream for ConStream<io::StderrLock<'a>> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        self.get_size(Handle::Stderr)
+    }
+}
+
 impl LockableStream for ConStream<io::Stdout> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+    fn lock<'a>(&'a self) -> Box<CLIStream + 'a> {
         let locked = ConStream {
             w: self.w.lock(),
             hndl: self.hndl,
             orig_pair: self.orig_pair,
+            defsz: self.defsz,
             do_style: self.do_style,
         };
         Box::new(locked)
@@ -177,11 +248,12 @@ impl LockableStream for ConStream<io::Stdout> {
 }
 
 impl LockableStream for ConStream<io::Stderr> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+    fn lock<'a>(&'a self) -> Box<CLIStream + 'a> {
         let locked = ConStream {
             w: self.w.lock(),
             hndl: self.hndl,
             orig_pair: self.orig_pair,
+            defsz: self.defsz,
             do_style: self.do_style,
         };
         Box::new(locked)

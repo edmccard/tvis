@@ -1,18 +1,20 @@
-use std::io;
+use std::io::{self, Write};
 use tinf::Desc;
-use tvis_util::{Handle, TerminalMode};
-use {Color, LockableStream, Result, Stream, DoStyle};
+use tvis_util::{size, Handle, TerminalMode};
+use {Color, LockableStream, Result, CLIStream, Stream, DoStyle, WinSize};
 
 /// A styled stream using terminfo escape sequences.
 ///
-/// Instances are lightweight, using only three escape sequences
+/// Instances are lightweight, using only four escape sequences
 /// (instead of copying entire terminfo descriptions).
 pub struct TermStream<T> {
     cap_reset: Vec<u8>,
     cap_fg: Vec<u8>,
     cap_em: Vec<u8>,
+    cap_rewind: Vec<u8>,
     w: T,
-    is_cli: bool,
+    defsz: WinSize,
+    mode: TerminalMode,
 }
 
 impl TermStream<io::Stdout> {
@@ -35,58 +37,65 @@ impl TermStream<io::Stderr> {
 
 // Thanks to /u/cbreeden for help with lifetimes.
 impl LockableStream for TermStream<io::Stdout> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+    fn lock<'a>(&'a self) -> Box<CLIStream + 'a> {
         let locked = TermStream {
             cap_reset: self.cap_reset.clone(),
             cap_fg: self.cap_fg.clone(),
             cap_em: self.cap_em.clone(),
+            cap_rewind: self.cap_rewind.clone(),
             w: self.w.lock(),
-            is_cli: self.is_cli,
+            defsz: self.defsz,
+            mode: self.mode,
         };
         Box::new(locked)
     }
 }
 
 impl LockableStream for TermStream<io::Stderr> {
-    fn lock<'a>(&'a self) -> Box<Stream + 'a> {
+    fn lock<'a>(&'a self) -> Box<CLIStream + 'a> {
         let locked = TermStream {
             cap_reset: self.cap_reset.clone(),
             cap_fg: self.cap_fg.clone(),
             cap_em: self.cap_em.clone(),
+            cap_rewind: self.cap_rewind.clone(),
             w: self.w.lock(),
-            is_cli: self.is_cli,
+            defsz: self.defsz,
+            mode: self.mode,
         };
         Box::new(locked)
     }
 }
 
 impl<T: io::Write> TermStream<T> {
-    /// Create a `TermStream` that wraps a `std::io::Write`, using the
-    /// terminfo description given by `desc`.
-    ///
-    /// If `do_style` is false, or `desc[sgr0]` is empty, the `Stream`
-    /// methods (`reset`, `fg`, and `em`) will have no effect.
-    pub fn new(
+    fn new(
         w: T,
         desc: &Desc,
         do_style: bool,
-        is_cli: bool,
+        mode: TerminalMode,
     ) -> TermStream<T> {
+        use self::TerminalMode::*;
         use tinf::cap;
 
+        let mut term_stream = TermStream {
+            cap_reset: Vec::new(),
+            cap_fg: Vec::new(),
+            cap_em: Vec::new(),
+            cap_rewind: if mode == Redir {
+                Vec::new()
+            } else {
+                desc[cap::cuu].to_vec()
+            },
+            w,
+            defsz: get_default_size(mode, desc),
+            mode: mode,
+        };
         let do_style = do_style && !desc[cap::sgr0].is_empty();
-        match do_style {
-            true => {
-                TermStream {
-                    cap_reset: desc[cap::sgr0].to_vec(),
-                    cap_fg: desc[cap::setaf].to_vec(),
-                    cap_em: get_em(desc),
-                    w,
-                    is_cli,
-                }
-            }
-            false => TermStream::init(w),
+        if do_style {
+            term_stream.cap_reset = desc[cap::sgr0].to_vec();
+            term_stream.cap_fg = desc[cap::setaf].to_vec();
+            term_stream.cap_em = get_em(desc);
         }
+        term_stream
     }
 
     pub(super) fn std(
@@ -97,40 +106,54 @@ impl<T: io::Write> TermStream<T> {
         use self::TerminalMode::*;
         use self::DoStyle::*;
 
+        let use_style = match mode {
+            Redir => do_style == Always,
+            _ => do_style != Never,
+        };
+
         match mode {
-            Redir => {
-                TermStream::new(w, Desc::current(), do_style == Always, false)
-            }
-            Term => {
-                TermStream::new(w, Desc::current(), do_style != Never, true)
-            }
-            #[cfg(windows)]
-            Cygwin => {
-                TermStream::new(w, Desc::current(), do_style != Never, true)
-            }
-            #[cfg(windows)]
-            Console => TermStream::init(w),
             #[cfg(windows)]
             Win10 => {
                 TermStream {
                     cap_reset: b"\x1b[0m".to_vec(),
                     cap_fg: b"\x1b[3%p1%dm".to_vec(),
                     cap_em: b"\x1b[1m".to_vec(),
+                    cap_rewind: b"\x1b[%p1%dA".to_vec(),
                     w,
-                    is_cli: true,
+                    defsz: size::get_default_console_size(),
+                    mode: TerminalMode::Win10,
                 }
             }
+            _ => TermStream::new(w, Desc::current(), use_style, mode),
         }
-
     }
 
-    fn init(w: T) -> TermStream<T> {
-        TermStream {
-            cap_reset: Vec::new(),
-            cap_fg: Vec::new(),
-            cap_em: Vec::new(),
-            w,
-            is_cli: false,
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        if self.mode == TerminalMode::Redir {
+            panic!("cli method called on redirected stream");
+        }
+        self.flush()?;
+        if count > 0 {
+            self.write_all(&[b'\r'])?;
+        }
+        if count > 1 {
+            ::tinf::tparm(
+                &mut self.w,
+                &self.cap_rewind,
+                &mut params!(count - 1),
+                &mut ::tinf::Vars::new(),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn get_size(&self, handle: Handle) -> WinSize {
+        if self.mode == TerminalMode::Redir {
+            panic!("cli method called on redirected stream");
+        }
+        match size::get_size(handle) {
+            Some(sz) => sz,
+            None => self.defsz,
         }
     }
 }
@@ -190,7 +213,29 @@ impl<T: io::Write> Stream for TermStream<T> {
     }
 
     fn is_cli(&self) -> bool {
-        self.is_cli
+        self.mode != TerminalMode::Redir
+    }
+}
+
+fn get_default_size(mode: TerminalMode, desc: &Desc) -> WinSize {
+    #[cfg(windows)]
+    use self::TerminalMode::*;
+    use tinf::cap;
+
+    match mode {
+        #[cfg(windows)]
+        Win10 | Console => size::get_default_console_size(),
+        _ => {
+            let cols = match desc[cap::cols] {
+                0 | 0xffff => 80,
+                v => v as i32,
+            };
+            let rows = match desc[cap::lines] {
+                0 | 0xffff => 24,
+                v => v as i32,
+            };
+            WinSize { cols, rows }
+        }
     }
 }
 
@@ -213,4 +258,49 @@ fn get_em(desc: &Desc) -> Vec<u8> {
     }
 
     Vec::new()
+}
+
+
+impl CLIStream for TermStream<io::Stdout> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        // if cygwin, call with locked self.w else below
+        self.get_size(Handle::Stdout)
+    }
+}
+
+impl CLIStream for TermStream<io::Stderr> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        // if cygwin, call with locked self.w?
+        self.get_size(Handle::Stderr)
+    }
+}
+
+impl<'a> CLIStream for TermStream<io::StdoutLock<'a>> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        // if cygwin, call with self.w?
+        self.get_size(Handle::Stdout)
+    }
+}
+
+impl<'a> CLIStream for TermStream<io::StderrLock<'a>> {
+    fn rewind_lines(&mut self, count: u16) -> Result<()> {
+        self.rewind_lines(count)
+    }
+
+    fn get_size(&self) -> WinSize {
+        // if cygwin, call with self.w?
+        self.get_size(Handle::Stderr)
+    }
 }

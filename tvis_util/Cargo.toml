@@ -1,6 +1,6 @@
 [package]
 name = "tvis_util"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Ed McCardell <edmccard@hotmail.com>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/edmccard/tvis"

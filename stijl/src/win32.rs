@@ -10,8 +10,8 @@ pub type Handle = *mut libc::c_void;
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
 pub struct Coord {
-    x: i16,
-    y: i16,
+    pub x: i16,
+    pub y: i16,
 }
 
 #[repr(C)]
@@ -27,10 +27,10 @@ pub struct ConsoleScreenBufferInfo {
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
 pub struct SmallRect {
-    left: i16,
-    top: i16,
-    right: i16,
-    bottom: i16,
+    pub left: i16,
+    pub top: i16,
+    pub right: i16,
+    pub bottom: i16,
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -40,6 +40,10 @@ extern "system" {
         console_screen_buffer_info: *mut ConsoleScreenBufferInfo,
     ) -> Bool;
     pub fn GetStdHandle(std_handle: u32) -> Handle;
+    pub fn SetConsoleCursorPosition(
+        console_output: Handle,
+        cursor_position: Coord
+    ) -> Bool;
     pub fn SetConsoleTextAttribute(
         console_output: Handle,
         attributes: u16,

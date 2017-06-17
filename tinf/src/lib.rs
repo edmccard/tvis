@@ -149,14 +149,11 @@ impl Desc {
         let d1 = to_path(env::var("TERMINFO").ok());
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
         let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
-        let d3 = d3.into_iter()
-            .map(
-                |d| if d.as_os_str().is_empty() {
-                    path_to_root("usr/share/terminfo")
-                } else {
-                    d
-                }
-            );
+        let d3 = d3.into_iter().map(|d| if d.as_os_str().is_empty() {
+            path_to_root("usr/share/terminfo")
+        } else {
+            d
+        });
         let d4 = vec![
             path_to_root("etc/terminfo"),
             path_to_root("lib/terminfo"),
@@ -227,15 +224,13 @@ impl Desc {
             .pop()
             .expected("read_strs with length 1");
 
-        Ok(
-            Desc {
-                names,
-                bools,
-                nums,
-                strings,
-                ext: Desc::parse_user(r)?,
-            }
-        )
+        Ok(Desc {
+            names,
+            bools,
+            nums,
+            strings,
+            ext: Desc::parse_user(r)?,
+        })
     }
 
     /// The description for the terminal type from the `TERM`
@@ -252,9 +247,9 @@ impl Desc {
         let ext_header = r.read_words(5);
         if let Err(e) = ext_header {
             return match e.kind() {
-                       io::ErrorKind::UnexpectedEof => Ok(Vec::new()),
-                       _ => Err(DescError::from(e)),
-                   };
+                io::ErrorKind::UnexpectedEof => Ok(Vec::new()),
+                _ => Err(DescError::from(e)),
+            };
         }
         let ext_header = ext_header.expected("Ok() ext_header");
 
@@ -274,28 +269,25 @@ impl Desc {
         let mut ext = Vec::new();
         ext_strs.reverse();
         for val in ext_strs {
-            let name =
-                &ext_names
-                     .pop()
-                     .expected("names.len == (strs + nums + bools).len");
+            let name = &ext_names
+                .pop()
+                .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Str(CapName::U(name), val));
         }
         ext_nums.reverse();
         for val in ext_nums {
-            let name =
-                &ext_names
-                     .pop()
-                     .expected("names.len == (strs + nums + bools).len");
+            let name = &ext_names
+                .pop()
+                .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Num(CapName::U(name), val));
         }
         ext_bools.reverse();
         for val in ext_bools {
-            let name =
-                &ext_names
-                     .pop()
-                     .expected("names.len == (strs + nums + bools).len");
+            let name = &ext_names
+                .pop()
+                .expected("names.len == (strs + nums + bools).len");
             let name = UserDef(str::from_utf8(name)?.to_owned());
             ext.push(ICap::Bool(CapName::U(name), val));
         }
@@ -560,12 +552,10 @@ impl<'a> AlignReader<'a> {
     fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(n);
         if self.r.take(n as u64).read_to_end(&mut buf)? < n {
-            return Err(
-                io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "failed to fill whole buffer",
-                )
-            );
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "failed to fill whole buffer",
+            ));
         }
         self.n += n;
         Ok(buf)

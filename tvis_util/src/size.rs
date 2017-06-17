@@ -25,12 +25,10 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
     if res == 0 {
         return None;
     }
-    Some(
-        WinSize {
-            cols: (csbi.window.right - csbi.window.left + 1) as i32,
-            rows: (csbi.window.bottom - csbi.window.top + 1) as i32,
-        }
-    )
+    Some(WinSize {
+        cols: (csbi.window.right - csbi.window.left + 1) as i32,
+        rows: (csbi.window.bottom - csbi.window.top + 1) as i32,
+    })
 }
 
 #[cfg(windows)]
@@ -52,12 +50,10 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
     if res != 0 {
         return None;
     }
-    Some(
-        WinSize {
-            cols: win.ws_col as i32,
-            rows: win.ws_row as i32,
-        }
-    )
+    Some(WinSize {
+        cols: win.ws_col as i32,
+        rows: win.ws_row as i32,
+    })
 }
 
 #[cfg(windows)]

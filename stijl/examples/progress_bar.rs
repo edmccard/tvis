@@ -35,11 +35,7 @@ fn progress_str(cols: usize, completion: f32) -> Vec<u8> {
         );
         return pstr.into_inner();
     }
-    write!(
-        &mut pstr,
-        "Processing:{}",
-        if cols > 16 { " " } else { "" }
-    );
+    write!(&mut pstr, "Processing:{}", if cols > 16 { " " } else { "" });
     if cols > 17 {
         let cols = (cols - 17) as u64;
         let fill = (completion * (cols as f32)) as u64;

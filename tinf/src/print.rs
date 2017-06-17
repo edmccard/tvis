@@ -540,13 +540,12 @@ impl Formatter {
             }
         }
         let num = match fs {
-                'd' => format!("{}", val),
-                'o' => format!("{:o}", val),
-                'x' => format!("{:x}", val),
-                'X' => format!("{:X}", val),
-                _ => unreachable!(),
-            }
-            .into_bytes();
+            'd' => format!("{}", val),
+            'o' => format!("{:o}", val),
+            'x' => format!("{:x}", val),
+            'X' => format!("{:X}", val),
+            _ => unreachable!(),
+        }.into_bytes();
         let mut prec = self.prec;
         if prec != -1 {
             if fs == 'o' && self.alt {

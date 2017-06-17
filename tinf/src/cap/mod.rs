@@ -678,7 +678,10 @@ where
     K: Borrow<UserDef>,
 {
     fn from(val: (K, &'static str)) -> Cap {
-        Cap(ICap::Str(CapName::U((val.0).borrow().clone()), (val.1).into()),)
+        Cap(ICap::Str(
+            CapName::U((val.0).borrow().clone()),
+            (val.1).into(),
+        ))
     }
 }
 

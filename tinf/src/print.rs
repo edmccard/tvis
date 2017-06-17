@@ -772,7 +772,7 @@ impl ::std::error::Error for CapError {
     fn cause(&self) -> Option<&::std::error::Error> {
         use self::CapErrorImpl::*;
         match self.inner {
-            Io(ref err) => err.cause(),
+            Io(ref err) => Some(err),
             _ => None,
         }
     }

@@ -697,7 +697,7 @@ impl ::std::error::Error for DescError {
     fn cause(&self) -> Option<&::std::error::Error> {
         use self::DescErrorImpl::*;
         match self.inner {
-            Io(ref err) => err.cause(),
+            Io(ref err) => Some(err),
             _ => None,
         }
     }

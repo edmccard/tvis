@@ -6,8 +6,7 @@
 //! drop-in replacements for `std::io::stdout()` and
 //! `std::io::stderr()`, which wrap them in a
 //! [`CLIStream`](trait.CLIStream.html) that supports eight foreground
-//! colors and emphasized text). The `CLIStream` can also "rewind" to
-//! overwrite previous lines.
+//! colors and emphasized text.
 //!
 //! ### Example
 //!
@@ -19,28 +18,59 @@
 //! #     foo().unwrap();
 //! # }
 //! # fn foo() -> Result<(), Box<std::error::Error>> {
-//! let str = &mut stijl::stdout(DoStyle::Auto);
-//! str.fg(Red);
-//! str.em();
-//! write!(str, "Warning: ");
-//! str.reset();
-//! writeln!(str, " winter is coming.");
+//! let stream = &mut stijl::stdout(DoStyle::Auto);
+//! stream.fg(Red);
+//! stream.em();
+//! write!(stream, "Warning: ");
+//! stream.reset();
+//! writeln!(stream, " this text is red.");
 //! # Ok(())
 //! # }
 //! ```
-//! # Platform notes
 //!
-//! [`stdout`](fn.stdout.html) and [`stderr`](fn.stderr.html) return a
-//! `TermStream` object for terminals that understand terminfo-style
-//! escape sequences, including the Cygwin and MSYS terminals, and the
-//! Windows 10 console (Anniversary Update or newer). They return a
-//! `ConStream` struct for consoles in earlier versions of Windows.
+//! # Animations
+//!
+//! The [`get_size`](trait.CLIStream.html#tymethod.rewind_lines) and
+//! [`rewind_lines`](trait.CLIStream.html#tymethod.rewind_lines)
+//! methods of [`CLIStream`](trait.CLIStream.html) can help make
+//! progress bars, spinners, and other simple animations.
+//!
+//! ### Example
+//!
+//! ```no_run
+//! use stijl::{CLIStream, DoStyle};
+//! use std::{time, thread};
+//!
+//! # fn main() {
+//! #     foo().unwrap();
+//! # }
+//! # use std::io::Write;
+//! # fn draw_indicator(w: &mut Write, pos: usize, max: usize) {}
+//! # fn foo() -> Result<(), Box<std::error::Error>> {
+//! let delay = time::Duration::from_millis(100);
+//! let stream = &mut stijl::stdout(DoStyle::Auto);
+//! let max = stream.get_size().cols as usize;
+//! let mut pos = 0;
+//! for _ in 0..1000 {
+//!     // draw_indicator is left as an exercise for the reader
+//!     draw_indicator(stream, pos, max);
+//!     thread::sleep(delay);
+//!     if max != 0 {
+//!         pos = (pos + 1) % max;
+//!     }
+//!     stream.rewind_lines(1);
+//! }
+//! # Ok(())
+//! # }
+//! ```
 //!
 //! # Multithreading
 //!
 //! The objects returned by [`stdout()`](fn.stdout.html) and
 //! [`stderr()`](fn.stderr.html) implement
-//! [`LockableStream`](trait.LockableStream.html).
+//! [`LockableStream`](trait.LockableStream.html), with a
+//! [`lock`](trait.LockableStream.html#tymethod.lock) method for
+//! synchronizing the stream.
 //!
 //! To reduce contention, multiple threads can write to their own
 //! [`BufStream`](struct.BufStream.html) objects and when finished,
@@ -65,6 +95,20 @@
 //! buf.playback(stream)?;
 //! # Ok(())
 //! # }
+//! ```
+//!
+//! # Platform notes
+//!
+//! [`stdout`](fn.stdout.html) and [`stderr`](fn.stderr.html) return a
+//! `TermStream` object for terminals that understand terminfo-style
+//! escape sequences, including the Cygwin and MSYS terminals, and the
+//! Windows 10 console (Anniversary Update or newer). They return a
+//! `ConStream` struct for consoles in earlier versions of Windows.
+//!
+//! On Windows, the same binary will produce equivalent styled output
+//! in either the console or a Cygwin terminal. However, in Cygwin,
+//! [`CLIStream::get_size()`](trait.CLIStream.html#tymethod.get_size)
+//! currently always returns the default size (80x24).
 
 #![allow(non_upper_case_globals)]
 #![cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
@@ -114,15 +158,15 @@ pub fn stderr(do_style: DoStyle) -> Box<LockableStream> {
 }
 
 
-/// Strategies for applying styles to standard output streams.
+/// Strategies for applying styles to text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DoStyle {
-    /// Always apply styles.
+    /// Always apply style.
     Always,
-    /// Apply styles if stdout/stderr write to a terminal, but not if
+    /// Apply style if stdout/stderr write to a terminal, but not if
     /// they are redirected.
     Auto,
-    /// Never apply styles.
+    /// Never apply style.
     Never,
 }
 
@@ -157,21 +201,30 @@ pub trait Stream: io::Write {
     /// Change the foreground color.
     fn fg(&mut self, fg: Color) -> Result<()>;
     /// Begin emphasized text.
+    ///
+    /// Emphasis stays in effect until `reset()` is called.
     fn em(&mut self) -> Result<()>;
     /// True if the stream is connected to a command-line interface.
     fn is_cli(&self) -> bool;
 }
 
-/// A `Stream` connected to a command-line interface.
+/// A [`Stream`](trait.CLIStream.html) connected to a command-line
+/// interface.
 pub trait CLIStream: Stream {
     /// "Rewind" the stream so that the last `count` lines can be
     /// overwritten.
     ///
-    /// Panics if the `Stream`s mode is `TerminalMode::Redir`.
+    /// Panics if the `Stream` is not connected to a command-line
+    /// window, that is, if
+    /// [`Stream::is_cli()`](trait.Stream.html#tymethod.is_cli) would
+    /// return false.
     fn rewind_lines(&mut self, count: u16) -> Result<()>;
     /// The size of the command-line window.
     ///
-    /// Panics if the `Stream`s mode is `TerminalMode::Redir`.
+    /// Panics if the `Stream` is not connected to a command-line
+    /// window, that is, if
+    /// [`Stream::is_cli()`](trait.Stream.html#tymethod.is_cli) would
+    /// return false.
     fn get_size(&self) -> WinSize;
 }
 
@@ -203,7 +256,8 @@ impl<'a> CLIStream for Box<CLIStream + 'a> {
     }
 }
 
-/// A [`Stream`](trait.Stream.html) with synchronized access.
+/// A [`CLIStream`](trait.CLIStream.html) that can be locked for
+/// synchronized access.
 pub trait LockableStream: CLIStream {
     /// Lock the stream, returning a writable guard.
     fn lock<'a>(&'a self) -> Box<CLIStream + 'a>;
@@ -239,36 +293,50 @@ impl CLIStream for Box<LockableStream> {
 
 /// An error that occurred writing to a `Stream`.
 #[derive(Debug)]
-pub struct Error(());
+pub struct Error {
+    inner: ErrorImpl,
+}
+
+#[derive(Debug)]
+enum ErrorImpl {
+    Io(io::Error),
+    Cap(::tinf::CapError),
+}
 
 impl From<io::Error> for Error {
-    fn from(_: io::Error) -> Error {
-        // TODO
-        Error(())
+    fn from(err: io::Error) -> Error {
+        Error { inner: ErrorImpl::Io(err) }
     }
 }
 
 impl From<::tinf::CapError> for Error {
-    fn from(_: ::tinf::CapError) -> Error {
-        // TODO
-        Error(())
+    fn from(err: ::tinf::CapError) -> Error {
+        Error { inner: ErrorImpl::Cap(err) }
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO Error::fmt()")
+        match self.inner {
+            ErrorImpl::Io(ref err) => err.fmt(f),
+            ErrorImpl::Cap(ref err) => err.fmt(f),
+        }
     }
 }
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        "TODO Error::description()"
+        match self.inner {
+            ErrorImpl::Io(ref err) => err.description(),
+            ErrorImpl::Cap(ref err) => err.description(),
+        }
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        // TODO
-        None
+        match self.inner {
+            ErrorImpl::Io(ref err) => Some(err),
+            ErrorImpl::Cap(ref err) => Some(err),
+        }
     }
 }
 

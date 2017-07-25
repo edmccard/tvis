@@ -118,6 +118,7 @@ extern crate libc;
 extern crate tvis_util;
 #[macro_use]
 extern crate tinf;
+#[cfg(windows)]
 #[macro_use]
 extern crate lazy_static;
 
@@ -342,7 +343,3 @@ impl error::Error for Error {
 
 /// Either success or failure.
 pub type Result<T> = std::result::Result<T, Error>;
-
-
-// Silences warning
-lazy_static!{}

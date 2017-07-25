@@ -92,7 +92,7 @@ use self::cap::{Cap, ICap, CapName, UserDef};
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Desc {
     names: Vec<String>,
     bools: Vec<bool>,

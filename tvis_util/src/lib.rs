@@ -18,6 +18,9 @@ pub enum Handle {
     Stderr = 0xfffffff4,
 }
 
+#[cfg(windows)]
+pub type WinHandle = *mut libc::c_void;
+
 impl Handle {
     /// The raw Windows handle for the given `handle`.
     #[cfg(windows)]

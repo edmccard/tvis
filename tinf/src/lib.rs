@@ -400,6 +400,17 @@ impl Desc {
             }
         }
 
+        fn add_num_val(vs: &mut Vec<u16>, idx: usize, val: u16) {
+            if idx >= vs.len() {
+                for _ in 0..(idx - vs.len()) {
+                    vs.push(0xffff);
+                }
+                vs.push(val);
+            } else {
+                vs[idx] = val;
+            }
+        }
+
         use self::ICap::*;
         for cap in caps {
             match cap.0 {
@@ -407,7 +418,7 @@ impl Desc {
                     add_val(&mut self.bools, idx, v);
                 }
                 Num(CapName::P(idx), v) => {
-                    add_val(&mut self.nums, idx, v);
+                    add_num_val(&mut self.nums, idx, v);
                 }
                 Str(CapName::P(idx), ref v) => {
                     add_val(&mut self.strings, idx, v.to_vec());

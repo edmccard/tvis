@@ -23,6 +23,7 @@ fn desc_literal() {
             "dumb", "80-column dumb tty",
             am => true,
             cols => 80,
+            lines => 24,
             bel => b"\x07",
             cr => b"\r",
             cud1 => b"\n",
@@ -32,7 +33,7 @@ fn desc_literal() {
     assert_eq!(desc[am], true);
     assert_eq!(desc[xsb], false);
     assert_eq!(desc[cols], 80);
-    assert_eq!(desc[lm], 0xffff);
+    assert_eq!(desc[it], 0xffff);
     assert_eq!(&desc[cr], b"\x0d");
     assert_eq!(vec!["dumb", "80-column dumb tty"], desc.names());
 }

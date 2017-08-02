@@ -574,6 +574,37 @@ impl Boolean {
         };
         pos.map(Boolean)
     }
+
+    /// An iterator over the predefined boolean capabilities.
+    pub fn iter() -> BoolIter {
+        BoolIter { current: 0 }
+    }
+
+    /// The short name of the capability.
+    pub fn short_name(&self) -> &'static str {
+        BOOLS[self.0]
+    }
+
+    /// The long name of the capability.
+    pub fn long_name(&self) -> &'static str {
+        BOOLEANS[self.0]
+    }
+}
+
+pub struct BoolIter {
+    current: usize,
+}
+
+impl Iterator for BoolIter {
+    type Item = Boolean;
+    fn next(&mut self) -> Option<Boolean> {
+        if self.current < NUM_BOOLS {
+            self.current += 1;
+            Some(Boolean(self.current - 1))
+        } else {
+            None
+        }
+    }
 }
 
 impl Number {
@@ -594,6 +625,37 @@ impl Number {
         };
         pos.map(Number)
     }
+
+    /// An iterator over the predefined numeric capabilities.
+    pub fn iter() -> NumIter {
+        NumIter { current: 0 }
+    }
+
+    /// The short name of the capability.
+    pub fn short_name(&self) -> &'static str {
+        NUMS[self.0]
+    }
+
+    /// The long name of the capability.
+    pub fn long_name(&self) -> &'static str {
+        NUMBERS[self.0]
+    }
+}
+
+pub struct NumIter {
+    current: usize,
+}
+
+impl Iterator for NumIter {
+    type Item = Number;
+    fn next(&mut self) -> Option<Number> {
+        if self.current < NUM_INTS {
+            self.current += 1;
+            Some(Number(self.current - 1))
+        } else {
+            None
+        }
+    }
 }
 
 impl String {
@@ -613,6 +675,37 @@ impl String {
             None
         };
         pos.map(String)
+    }
+
+    /// An iterator over the predefined string capabilities.
+    pub fn iter() -> StrIter {
+        StrIter { current: 0 }
+    }
+
+    /// The short name of the capability.
+    pub fn short_name(&self) -> &'static str {
+        STRS[self.0]
+    }
+
+    /// The long name of the capability.
+    pub fn long_name(&self) -> &'static str {
+        STRINGS[self.0]
+    }
+}
+
+pub struct StrIter {
+    current: usize,
+}
+
+impl Iterator for StrIter {
+    type Item = String;
+    fn next(&mut self) -> Option<String> {
+        if self.current < NUM_STRS {
+            self.current += 1;
+            Some(String(self.current - 1))
+        } else {
+            None
+        }
     }
 }
 

@@ -557,6 +557,11 @@ impl UserDef {
     pub fn named<T: AsRef<str>>(name: T) -> UserDef {
         UserDef(name.as_ref().into())
     }
+
+    /// The string form of this name.
+    pub fn name(&self) -> &str {
+        &self.0
+    }
 }
 
 impl Boolean {

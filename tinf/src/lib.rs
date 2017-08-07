@@ -43,6 +43,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io;
@@ -358,6 +359,24 @@ impl Desc {
         false
     }
 
+    /// List the names of any user-defined boolean capabilities.
+    pub fn bool_exts(&self) -> Vec<&UserDef> {
+        let mut names = HashSet::new();
+        let mut exts: Vec<&UserDef> = Vec::new();
+        for ecap in self.ext.iter().rev() {
+            match *ecap {
+                ICap::Bool(CapName::U(ref n), _) => {
+                    if !names.contains(n.name()) {
+                        exts.push(n);
+                        names.insert(n.name());
+                    }
+                }
+                _ => (),
+            }
+        }
+        exts
+    }
+
     /// Query a user-defined numeric capability.
     ///
     /// If the capability is absent, returns `0xffff`.
@@ -373,6 +392,24 @@ impl Desc {
         0xffff
     }
 
+    /// List the names of any user-defined numeric capabilities.
+    pub fn num_exts(&self) -> Vec<&UserDef> {
+        let mut names = HashSet::new();
+        let mut exts: Vec<&UserDef> = Vec::new();
+        for ecap in self.ext.iter().rev() {
+            match *ecap {
+                ICap::Num(CapName::U(ref n), _) => {
+                    if !names.contains(n.name()) {
+                        exts.push(n);
+                        names.insert(n.name());
+                    }
+                }
+                _ => (),
+            }
+        }
+        exts
+    }
+
     /// Query a user-defined string capability.
     ///
     /// If the capability is absent, returns an empty slice.
@@ -386,6 +423,24 @@ impl Desc {
             }
         }
         &[]
+    }
+
+    /// List the names of any user-defined string capabilities.
+    pub fn str_exts(&self) -> Vec<&UserDef> {
+        let mut names = HashSet::new();
+        let mut exts: Vec<&UserDef> = Vec::new();
+        for ecap in self.ext.iter().rev() {
+            match *ecap {
+                ICap::Str(CapName::U(ref n), _) => {
+                    if !names.contains(n.name()) {
+                        exts.push(n);
+                        names.insert(n.name());
+                    }
+                }
+                _ => (),
+            }
+        }
+        exts
     }
 
     fn update(&mut self, caps: &[Cap]) {

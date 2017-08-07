@@ -13,14 +13,29 @@ fn main() {
             println!("{}", b.short_name());
         }
     }
+    for b in desc.bool_exts() {
+        if desc.get_bool_ext(b) {
+            println!("* {}", b.name());
+        }
+    }
     for n in cap::Number::iter() {
         if desc[n] != 0xffff {
             println!("{}#{}", n.short_name(), desc[n]);
         }
     }
+    for n in desc.num_exts() {
+        if desc.get_num_ext(n) != 0xffff {
+            println!("* {}#{}", n.name(), desc.get_num_ext(n));
+        }
+    }
     for s in cap::String::iter() {
         if &desc[s] != b"" {
             println!("{}={}", s.short_name(), show(&desc[s]));
+        }
+    }
+    for s in desc.str_exts() {
+        if desc.get_str_ext(s) != b"" {
+            println!("* {}={}", s.name(), show(desc.get_str_ext(s)));
         }
     }
 }

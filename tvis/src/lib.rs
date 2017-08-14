@@ -19,7 +19,7 @@ pub mod screen;
 #[path = "screen.rs"]
 pub mod screen;
 
-pub use input::InputEvent;
+pub use input::{InputEvent, Key, Mod};
 
 /////////////////////////////////////////////////////////////////
 static SCREEN: AtomicBool = ATOMIC_BOOL_INIT;
@@ -51,9 +51,7 @@ enum ErrorImpl {
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
-        Error {
-            inner: ErrorImpl::Io(err),
-        }
+        Error { inner: ErrorImpl::Io(err) }
     }
 }
 
@@ -76,7 +74,7 @@ impl error::Error for Error {
 
     fn cause(&self) -> Option<&error::Error> {
         match self.inner {
-            ErrorImpl::Io(ref err) => Some(err),
+            ErrorImpl::Io(ref err) |
             ErrorImpl::FFI(_, ref err) => Some(err),
         }
     }
@@ -84,3 +82,6 @@ impl error::Error for Error {
 
 /// Either success or failure.
 pub type Result<T> = result::Result<T, Error>;
+
+#[allow(dead_code)]
+const SILENCE_WARNING_FOR_TEST_ONLY_MACRO_USE: [tinf::Param; 0] = params!();

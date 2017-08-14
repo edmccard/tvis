@@ -2,16 +2,14 @@ extern crate tinf;
 extern crate tvis;
 extern crate tvis_util;
 
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 
 #[cfg(windows)]
 use tvis::screen::ConsoleScreen;
 #[cfg(not(windows))]
 use tvis::screen::TerminalScreen;
-#[cfg(not(windows))]
-use tinf::Desc;
 
-use tvis::{Screen, InputEvent, Event, Result};
+use tvis::{Event, InputEvent, Key, Result, Screen};
 
 #[cfg(windows)]
 fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
@@ -20,7 +18,7 @@ fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
 
 #[cfg(not(windows))]
 fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
-    TerminalScreen::init(tx, Desc::current())
+    TerminalScreen::init(tx)
 }
 
 fn main() {
@@ -32,6 +30,7 @@ fn main() {
             return;
         }
     };
+    let _ = &screen;
 
     for evt in rx.iter() {
         if let Some(evt) = evt.as_any().downcast_ref::<InputEvent>() {
@@ -39,6 +38,19 @@ fn main() {
                 InputEvent::Interrupt => {
                     println!("BYE!\r");
                     break;
+                }
+                InputEvent::Key(Key::Char(bytes, len), _)
+                    if len == 1 && bytes[0] == 96 => {
+                    println!("BYE!\r");
+                    break;
+                }
+                InputEvent::Key(k, m) => {
+                    println!(
+                        "KEY {:?}{}\r",
+                        m,
+                        k,
+                        //::std::str::from_utf8(&bytes[0..len as usize]).unwrap()
+                    );
                 }
                 _ => println!("EVENT: {:?}\r", evt),
             }

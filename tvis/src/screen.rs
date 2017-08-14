@@ -1,25 +1,25 @@
+#![cfg(not(windows))]
+
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 
 use libc;
-use tinf::{Desc, tputs};
 
 use {SCREEN, Screen, Error, Event, Result};
 
+
 pub struct TerminalScreen {
     init_ios: Option<libc::termios>,
-    desc: Desc,
 }
 
 impl TerminalScreen {
-    pub fn init(tx: Sender<Box<Event>>, desc: &Desc) -> Result<Box<Screen>> {
+    pub fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
         // TODO: make sure console is not redirected, etc.
         if SCREEN.compare_and_swap(false, true, Ordering::SeqCst) {
             panic!("TODO: better singleton panic message");
         }
         let mut screen = TerminalScreen {
             init_ios: None,
-            desc: (*desc).clone(),
         };
         screen.set_ios()?;
         screen.init_term()?;

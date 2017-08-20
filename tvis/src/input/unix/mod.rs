@@ -336,6 +336,7 @@ impl Reader {
                     ParseState::KeySeq2 => InputEvent::Key(k, m.add_alt()),
                     _ => InputEvent::Key(k, m),
                 };
+                self.hold_keys.clear();
                 self.state = ParseState::Init;
                 self.send(event)
             }

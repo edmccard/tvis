@@ -11,9 +11,10 @@ mod platform;
 mod platform;
 
 pub(crate) use self::platform::start_threads;
-
 #[cfg(windows)]
 pub(crate) use self::platform::ScreenSize;
+
+use Coords;
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum Key {
@@ -51,10 +52,8 @@ impl Key {
     fn ascii(byte: u8) -> Key {
         Key::Char([byte, 0, 0, 0], 1)
     }
-}
 
-impl Default for Key {
-    fn default() -> Key {
+    fn empty() -> Key {
         Key::Char([0, 0, 0, 0], 0)
     }
 }
@@ -133,12 +132,34 @@ impl Mod {
 
 type KeyPress = (Key, Mod);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MouseButton {
+    Unknown,
+    Left,
+    Middle,
+    Right,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ButtonMotion {
+    Press,
+    Release,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum WheelMotion {
+    Up,
+    Down,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InputEvent {
     Repaint,
     Interrupt,
     Break,
-    Mouse,
+    Mouse(ButtonMotion, MouseButton, Mod, Coords),
+    MouseWheel(WheelMotion, Mod),
+    MouseMove(Mod, Coords),
     Key(Key, Mod),
 }
 

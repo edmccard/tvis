@@ -19,7 +19,7 @@ pub mod screen;
 #[path = "screen.rs"]
 pub mod screen;
 
-pub use input::{InputEvent, Key, Mod};
+pub use input::{InputEvent, Key, Mod, MouseButton, ButtonMotion, WheelMotion};
 
 /////////////////////////////////////////////////////////////////
 static SCREEN: AtomicBool = ATOMIC_BOOL_INIT;
@@ -29,6 +29,8 @@ pub trait Screen {}
 pub trait Event: fmt::Debug + Send {
     fn as_any(&self) -> &Any;
 }
+
+pub type Coords = (u32, u32);
 
 #[derive(Debug)]
 pub struct Error {
@@ -85,3 +87,8 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[allow(dead_code)]
 const SILENCE_WARNING_FOR_TEST_ONLY_MACRO_USE: [tinf::Param; 0] = params!();
+
+#[cfg(not(windows))]
+fn is_rxvt(desc: &::tinf::Desc) -> bool {
+    !desc.names().is_empty() && desc.names()[0].starts_with("rxvt-unicode")
+}

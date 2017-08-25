@@ -1,9 +1,12 @@
 use tinf::{Desc, cap};
 use input::{KeyPress, Key, Mod};
+use super::escmouse::{MOUSE_MAGIC, SGR_MAGIC};
+use super::escmouse::Type as MouseType;
+use super::escmouse::Parser as MouseParser;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C)]
-struct EscNode {
+pub(super) struct EscNode {
     sibling: i16,
     children: i16,
     key: KeyPress,
@@ -16,66 +19,71 @@ impl Default for EscNode {
         EscNode {
             sibling: -1,
             children: -1,
-            key: Default::default(),
+            key: (Key::empty(), Default::default()),
             byte: 0,
             unused: 0,
         }
     }
 }
 
-enum KeyState {
-    Normal(u8),
+enum State {
+    Plain(u8),
     ModDigit1,
     ModDigit2,
 }
 
-pub(super) enum KeyResult {
+pub(super) enum ParseResult {
     Found(KeyPress),
+    Mouse(MouseType),
     Maybe,
     No,
 }
 
-pub(super) struct KeyParser {
+pub(super) struct Parser {
     nodes: Vec<EscNode>,
-    state: KeyState,
+    state: State,
     idx: i16,
     xterm_mods: bool,
 }
 
-impl KeyParser {
-    pub(super) fn new(desc: &Desc) -> KeyParser {
-        // rxvt is peculiar (Shift-F1 = F11, Shift-F2 = F12, Shift-F3=kf13)
+impl Parser {
+    pub(super) fn new(desc: &Desc) -> Parser {
         let mut nodes: Vec<EscNode> = vec![Default::default()];
-        let xterm_mods = KeyParser::xterm_mods(desc);
+        MouseParser::add_mouse_keys(&mut nodes);
         // For the keys in APPKEYS, xterm-alikes deviate from their
         // normal behavior for modifier keys; instead of sending, for
         // example ';2' for shift just before the last byte of the
         // normal sequence, they send '1;2' (Also, since we do not
         // activate application mode, we add entries that swap SS3 for
         // CSI).
+        let xterm_mods = Parser::xterm_mods(desc);
         for &(c, k) in APPKEYS.iter().filter(|x| !desc[x.0].is_empty()) {
-            KeyParser::add_key_bytes(&mut nodes, &desc[c][1..], k);
+            Parser::add_key_bytes(&mut nodes, &desc[c][1..], k);
             if xterm_mods && desc[c][1] == b'O' {
                 let mut csi = vec![b'['];
                 csi.extend(&desc[c][2..]);
-                KeyParser::add_key_bytes(&mut nodes, &csi, k);
+                Parser::add_key_bytes(&mut nodes, &csi, k);
                 csi = vec![b'[', b'1'];
                 csi.extend(&desc[c][2..]);
-                KeyParser::add_key_bytes(&mut nodes, &csi, k);
+                Parser::add_key_bytes(&mut nodes, &csi, k);
             }
         }
         for &(c, k) in KEYS.iter().filter(|x| !desc[x.0].is_empty()) {
-            KeyParser::add_key_bytes(&mut nodes, &desc[c][1..], k);
+            Parser::add_key_bytes(&mut nodes, &desc[c][1..], k);
         }
-        KeyParser {
+        Parser {
             nodes,
-            state: KeyState::Normal(0),
+            state: State::Plain(0),
             idx: 1,
             xterm_mods,
         }
     }
 
-    fn add_key_bytes(nodes: &mut Vec<EscNode>, bytes: &[u8], key: KeyPress) {
+    pub(super) fn add_key_bytes(
+        nodes: &mut Vec<EscNode>,
+        bytes: &[u8],
+        key: KeyPress,
+    ) {
         let mut idx = 0usize;
         let mut pos = 0usize;
         while pos < bytes.len() {
@@ -113,7 +121,7 @@ impl KeyParser {
     // scheme for modifier keys.
     fn xterm_mods(desc: &Desc) -> bool {
         cap::String::iter()
-            .filter(KeyParser::is_shifted_key)
+            .filter(Parser::is_shifted_key)
             .map(|c| &desc[c])
             .any(|s| {
                 s.len() > 3 && s[s.len() - 2] == b'2' && s[s.len() - 3] == b';'
@@ -126,22 +134,29 @@ impl KeyParser {
         bytes.next() == Some(b'k') && bytes.all(|c| c >= b'A' && c <= b'Z')
     }
 
-    fn reset(&mut self) {
+    pub(super) fn reset(&mut self) {
         self.idx = 1;
-        self.state = KeyState::Normal(0);
+        self.state = State::Plain(0);
     }
 
-    pub(super) fn search(&mut self, byte: u8) -> KeyResult {
-        use self::KeyState::*;
-        use self::KeyResult::*;
+    pub(super) fn search(&mut self, byte: u8) -> ParseResult {
+        use self::State::*;
+        use self::ParseResult::*;
+        use super::escmouse::Type::*;
 
         match self.state {
-            Normal(m) => {
+            Plain(m) => {
                 match self.check(byte) {
                     Found((k, Mod { mods: m1 })) => {
                         self.reset();
-                        // ignore "meta" bit
-                        Found((k, Mod::raw((m1 | m) & 7)))
+                        match k {
+                            Key::Char(_, MOUSE_MAGIC) => Mouse(Normal),
+                            Key::Char(_, SGR_MAGIC) => Mouse(SGR),
+                            _ => {
+                                // ignore "meta" bit
+                                Found((k, Mod::raw((m1 | m) & 7)))
+                            }
+                        }
                     }
                     Maybe => Maybe,
                     No => {
@@ -152,11 +167,12 @@ impl KeyParser {
                         self.reset();
                         No
                     }
+                    _ => unreachable!(),
                 }
             }
             ModDigit1 => {
                 if byte >= b'2' && byte <= b'9' {
-                    self.state = Normal(byte - b'2' + 1);
+                    self.state = Plain(byte - b'2' + 1);
                     return Maybe;
                 }
                 if byte == b'1' {
@@ -168,7 +184,7 @@ impl KeyParser {
             }
             ModDigit2 => {
                 if byte >= b'0' && byte <= b'6' {
-                    self.state = Normal(byte - b'0' + 1);
+                    self.state = Plain(byte - b'0' + 1);
                     return Maybe;
                 }
                 self.reset();
@@ -177,8 +193,8 @@ impl KeyParser {
         }
     }
 
-    fn check(&mut self, byte: u8) -> KeyResult {
-        use self::KeyResult::*;
+    fn check(&mut self, byte: u8) -> ParseResult {
+        use self::ParseResult::*;
 
         let mut idx = self.idx;
         while idx >= 0 {
@@ -227,13 +243,13 @@ static KEYS: &'static [(cap::String, KeyPress)] =
 
 #[cfg(test)]
 mod test {
-    use super::{Key, Mod, KeyPress, KeyParser, KeyState, KeyResult, EscNode};
+    use super::{Key, Mod, KeyPress, Parser, State, ParseResult, EscNode};
 
     fn node(s: i16, c: i16, b: u8) -> EscNode {
         EscNode {
             sibling: s,
             children: c,
-            key: Default::default(),
+            key: (Key::empty(), Default::default()),
             byte: b,
             unused: 0,
         }
@@ -249,22 +265,22 @@ mod test {
         }
     }
 
-    fn empty_keys(xterm_mods: bool) -> KeyParser {
-        KeyParser {
+    fn empty_keys(xterm_mods: bool) -> Parser {
+        Parser {
             nodes: vec![Default::default()],
-            state: KeyState::Normal(0),
+            state: State::Plain(0),
             idx: 1,
             xterm_mods,
         }
     }
 
-    fn search(kp: &mut KeyParser, bytes: &[u8]) -> Option<KeyPress> {
-        use self::KeyResult::*;
+    fn search(kp: &mut Parser, bytes: &[u8]) -> Option<KeyPress> {
+        use self::ParseResult::*;
         for byte in bytes {
             match kp.search(*byte) {
                 Found(k) => return Some(k),
                 Maybe => (),
-                No => return None,
+                _ => return None,
             }
         }
         None
@@ -275,7 +291,7 @@ mod test {
         let up_arr = (b"[A", (Key::Up, Mod::none()));
         let down_arr = (b"[B", (Key::Down, Mod::none()));
         let mut built = empty_keys(false);
-        KeyParser::add_key_bytes(&mut built.nodes, up_arr.0, up_arr.1);
+        Parser::add_key_bytes(&mut built.nodes, up_arr.0, up_arr.1);
         assert_eq!(search(&mut built, up_arr.0), Some(up_arr.1));
         assert_eq!(search(&mut built, b"[A123"), Some(up_arr.1));
         assert_eq!(search(&mut built, down_arr.0), None);
@@ -294,9 +310,9 @@ mod test {
         let f6 = (b"[17~", (Key::F6, Mod::none()));
         let f7 = (b"[18~", (Key::F7, Mod::none()));
         let mut built = empty_keys(false);
-        KeyParser::add_key_bytes(&mut built.nodes, f5.0, f5.1);
-        KeyParser::add_key_bytes(&mut built.nodes, f6.0, f6.1);
-        KeyParser::add_key_bytes(&mut built.nodes, f7.0, f7.1);
+        Parser::add_key_bytes(&mut built.nodes, f5.0, f5.1);
+        Parser::add_key_bytes(&mut built.nodes, f6.0, f6.1);
+        Parser::add_key_bytes(&mut built.nodes, f7.0, f7.1);
         assert_eq!(search(&mut built, f7.0), Some(f7.1));
         assert_eq!(search(&mut built, f6.0), Some(f6.1));
         assert_eq!(search(&mut built, f5.0), Some(f5.1));
@@ -320,8 +336,8 @@ mod test {
         let f1 = (b"OP", (Key::F1, Mod::none()));
         let f5 = (b"[15~", (Key::F5, Mod::none()));
         let mut built = empty_keys(false);
-        KeyParser::add_key_bytes(&mut built.nodes, f1.0, f1.1);
-        KeyParser::add_key_bytes(&mut built.nodes, f5.0, f5.1);
+        Parser::add_key_bytes(&mut built.nodes, f1.0, f1.1);
+        Parser::add_key_bytes(&mut built.nodes, f5.0, f5.1);
         assert_eq!(search(&mut built, f1.0), Some(f1.1));
         assert_eq!(search(&mut built, f5.0), Some(f5.1));
 
@@ -345,7 +361,7 @@ mod test {
         let mf5 = (b"[15;9~", (Key::F5, Mod::none()));
         let macf5 = (b"[15;15~", (Key::F5, Mod::ctrl_alt()));
         let mut with_mods = empty_keys(true);
-        KeyParser::add_key_bytes(&mut with_mods.nodes, f5.0, f5.1);
+        Parser::add_key_bytes(&mut with_mods.nodes, f5.0, f5.1);
         assert_eq!(search(&mut with_mods, f5.0), Some(f5.1));
         assert_eq!(search(&mut with_mods, sf5.0), Some(sf5.1));
         assert_eq!(search(&mut with_mods, acf5.0), Some(acf5.1));

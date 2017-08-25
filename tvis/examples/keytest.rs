@@ -39,17 +39,15 @@ fn main() {
                     println!("BYE!\r");
                     break;
                 }
-                InputEvent::Key(Key::Char(bytes, len), _)
-                    if len == 1 && bytes[0] == 96 => {
-                    println!("BYE!\r");
-                    break;
-                }
                 InputEvent::Key(k, m) => {
+                    if k == Key::Char([96, 0, 0, 0], 1) {
+                        println!("BYE!\r");
+                        return;
+                    }
                     println!(
                         "KEY {:?}{}\r",
                         m,
                         k,
-                        //::std::str::from_utf8(&bytes[0..len as usize]).unwrap()
                     );
                 }
                 _ => println!("EVENT: {:?}\r", evt),

@@ -8,9 +8,12 @@ use libc::{self, c_int};
 use tinf::{Desc, cap};
 
 use input::{InputEvent, Key, Mod};
-use {Error, Event, Result};
+use {is_rxvt, Error, Event, Result};
 
 mod esckey;
+mod escmouse;
+
+use self::esckey::EscNode;
 
 static mut SIGNAL_FDS: Option<(c_int, c_int)> = None;
 
@@ -74,14 +77,15 @@ fn init_signals() {
     }
 }
 
-const WAIT_MICROS: libc::suseconds_t = 25_000;
+const READ_BUF_SIZE: usize = 1024;
+const WAIT_MICROS: libc::suseconds_t = 10_000;
 
 // Convert input from stdin (and the signal pipe) into InputEvents.
 unsafe fn raw_event_loop(tx: Sender<Box<Event>>) {
     // TODO: indicate errors?
     let mut reader = Reader::new(Desc::current(), tx);
     let signal_fd = SIGNAL_FDS.unwrap().0;
-    let mut stdin_buf = [0u8; 1024];
+    let mut stdin_buf = [0u8; READ_BUF_SIZE];
     let mut override_timeout = false;
     let mut timeout = libc::timeval {
         tv_sec: 0,
@@ -121,7 +125,7 @@ unsafe fn raw_event_loop(tx: Sender<Box<Event>>) {
         }
         if libc::FD_ISSET(0, &mut read_fds) {
             let bufptr = stdin_buf.as_mut_ptr() as *mut libc::c_void;
-            let len = libc::read(0, bufptr, 1024);
+            let len = libc::read(0, bufptr, READ_BUF_SIZE);
             if len < 1 {
                 return;
             }
@@ -167,16 +171,19 @@ type ParseResult = ::std::result::Result<ParseOk, ()>;
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum ParseState {
     Init,
-    KeySeq1,
-    KeySeq2,
+    Esc1,
+    Esc2,
+    Mouse(escmouse::Type),
 }
 
 struct Reader {
-    seq: esckey::KeyParser,
+    kparse: esckey::Parser,
+    mparse: escmouse::Parser,
     utf8: Utf8Parser,
     tx: Sender<Box<Event>>,
     hold_keys: Vec<Utf8Val>,
     state: ParseState,
+    rxvt: bool,
     bs: u8,
     cbs: u8,
 }
@@ -189,11 +196,13 @@ impl Reader {
             (0x08, 0x7f)
         };
         Reader {
-            seq: esckey::KeyParser::new(desc),
+            kparse: esckey::Parser::new(desc),
+            mparse: escmouse::Parser::new(),
             utf8: Default::default(),
             tx,
             hold_keys: Vec::with_capacity(25),
             state: ParseState::Init,
+            rxvt: is_rxvt(desc),
             bs,
             cbs,
         }
@@ -218,62 +227,100 @@ impl Reader {
         }
     }
 
+    fn send_key(&self, k: Key, m: Mod) -> ParseResult {
+        self.send(InputEvent::Key(k, m))
+    }
+
+    fn send_mouse(&mut self, event: InputEvent) -> ParseResult {
+        self.hold_keys.clear();
+        self.state = ParseState::Init;
+        self.send(event)
+    }
+
     fn reset(&mut self) -> ParseResult {
         use self::ParseState::*;
+        use self::escmouse::Type::*;
+
         match self.state {
-            KeySeq1 => {
-                if self.hold_keys.is_empty() {
-                    let event = InputEvent::Key(Key::Esc, Mod::none());
-                    self.send(event)?;
-                } else {
-                    let (key, mods) = self.xlate_cp(self.hold_keys[0]);
-                    let event = InputEvent::Key(key, mods.add_alt());
-                    self.send(event)?;
-                    for cp in &self.hold_keys[1..] {
-                        let (key, mods) = self.xlate_cp(*cp);
-                        let event = InputEvent::Key(key, mods);
-                        self.send(event)?;
+            Init => (),
+            Mouse(ty) => {
+                // These input bytes were discarded when parsing
+                // switched from "key mode" to "mouse mode", so we
+                // manually recreate them.
+                self.send_key(Key::ascii(b'['), Mod::alt())?;
+                match ty {
+                    Normal => {
+                        self.send_key(Key::ascii(b'M'), Mod::none())?;
                     }
+                    SGR => {
+                        self.send_key(Key::ascii(b'<'), Mod::none())?;
+                    }
+                    Urxvt => (),
+                    _ => unreachable!(),
                 }
-            }
-            KeySeq2 => {
-                let event = InputEvent::Key(Key::Esc, Mod::alt());
-                self.send(event)?;
                 for cp in &self.hold_keys {
                     let (key, mods) = self.xlate_cp(*cp);
-                    let event = InputEvent::Key(key, mods);
-                    self.send(event)?;
+                    self.send_key(key, mods)?;
                 }
             }
-            _ => (),
-        }
+            Esc1 => {
+                if self.hold_keys.is_empty() {
+                    self.send_key(Key::Esc, Mod::none())?;
+                } else {
+                    self.reset_with_alt()?;
+                }
+            }
+            Esc2 => {
+                self.hold_keys.insert(0, ([27, 0, 0, 0], 1));
+                self.reset_with_alt()?;
+            }
+        };
+        self.kparse.reset();
         self.hold_keys.clear();
         self.state = Init;
         Ok(ParseOk::Continue)
     }
 
+    fn reset_with_alt(&self) -> ParseResult {
+        let (key, mods) = self.xlate_cp(self.hold_keys[0]);
+        self.send_key(key, mods.add_alt())?;
+        for cp in &self.hold_keys[1..] {
+            let (key, mods) = self.xlate_cp(*cp);
+            self.send_key(key, mods)?;
+        }
+        Ok(ParseOk::Continue)
+    }
+
     fn parse_stdin(&mut self, data: &[u8]) -> ParseResult {
-        println!("DATA {:?}\r", data);
-        // data does not start empty (len check in raw_event_loop).
+        use self::ParseState::*;
+        use self::escmouse::Type::*;
+
         let mut pos = 0usize;
         while pos < data.len() {
+            // Mouse coordinates in normal mode can have (single-byte)
+            // values between 128 and 255, so pass them along without
+            // parsing as UTF-8.
+            if self.state == Mouse(Normal) {
+                let cp = ([data[pos], 0, 0, 0], 1);
+                pos += 1;
+                self.parse_cp(cp)?;
+                continue;
+            }
             let read = self.utf8.read(&data[pos..]);
             match read {
                 Utf8Result::Wait => return Ok(ParseOk::Wait),
                 Utf8Result::Err(cp, _) => {
                     self.reset()?;
-                    let event =
-                        InputEvent::Key(Key::Err(cp.0, cp.1), Mod::none());
-                    return self.send(event);
+                    return self.send_key(Key::Err(cp.0, cp.1), Mod::none());
                 }
                 Utf8Result::Ok(cp, len) => {
                     pos += len as usize;
                     self.parse_cp(cp)?;
-                    if self.state != ParseState::Init && pos == data.len() {
-                        return Ok(ParseOk::Wait);
-                    }
                 }
             }
+        }
+        if self.state != Init {
+            return Ok(ParseOk::Wait);
         }
         Ok(ParseOk::Continue)
     }
@@ -282,63 +329,99 @@ impl Reader {
     fn parse_cp(&mut self, cp: Utf8Val) -> ParseResult {
         use self::ParseState::*;
 
-        match self.state {
-            Init => {
-                let (key, mods) = self.xlate_cp(cp);
-                if key == Key::Esc {
-                    self.reset()?;
-                    self.state = KeySeq1;
-                    Ok(ParseOk::Continue)
-                } else {
-                    self.send(InputEvent::Key(key, mods))
-                }
-            }
-            KeySeq1 => {
-                if cp.1 > 1 {
-                    self.hold_keys.push(cp);
-                    return self.reset();
-                }
-                if cp.0[0] == 27 {
-                    if self.hold_keys.is_empty() {
-                        self.state = KeySeq2
-                    } else {
-                        self.reset()?;
-                        self.state = KeySeq1
-                    }
-                    return Ok(ParseOk::Continue);
-                }
-                self.search_key_seq(cp)
-            }
-            KeySeq2 => {
-                if cp.1 > 1 {
-                    self.hold_keys.push(cp);
-                    return self.reset();
-                }
-                if cp.0[0] == 27 {
-                    self.reset()?;
-                    self.state = KeySeq1;
-                    return Ok(ParseOk::Continue);
-                }
-                self.search_key_seq(cp)
+        if self.state == Init {
+            let (key, mods) = self.xlate_cp(cp);
+            if key == Key::Esc {
+                self.reset()?;
+                self.state = Esc1;
+                return Ok(ParseOk::Continue);
+            } else {
+                return self.send_key(key, mods);
             }
         }
+
+        // No key or mouse sequence uses multi-byte characters
+        // (corollary: self.hold_keys cannot be observed to contain a
+        // multi-byte character, since it is cleared by reset after
+        // one is pushed).
+        if cp.1 > 1 {
+            self.hold_keys.push(cp);
+            return self.reset();
+        }
+
+        // Handle escape key.
+        if cp.0[0] == 27 {
+            if self.state == Esc1 && self.hold_keys.is_empty() {
+                self.state = Esc2;
+            } else {
+                self.reset()?;
+                self.state = Esc1
+            }
+            return Ok(ParseOk::Continue);
+        }
+
+        if let Mouse(_) = self.state {
+            self.hold_keys.push(cp);
+            return match self.mparse.parse(cp.0[0]) {
+                escmouse::ParseResult::No => self.reset(),
+                escmouse::ParseResult::Maybe => Ok(ParseOk::Continue),
+                escmouse::ParseResult::Found(evt) => self.send_mouse(evt),
+            };
+        }
+
+        // Handle subsequent bytes of key sequences.
+        if !self.rxvt && self.state == Esc2 {
+            self.send_key(Key::Esc, Mod::none())?;
+            self.state = Esc1;
+        }
+        self.hold_keys.push(cp);
+        self.search_key_seq(cp)
     }
 
     fn search_key_seq(&mut self, cp: Utf8Val) -> ParseResult {
-        use self::esckey::KeyResult::*;
+        use self::esckey::ParseResult::*;
 
-        self.hold_keys.push(cp);
-        match self.seq.search(cp.0[0]) {
-            No => self.reset(),
+        match self.kparse.search(cp.0[0]) {
+            No => {
+                // Urxvt extended mouse mode starts with CSI but
+                // doesn't have a prefix byte, so if a CSI seq isn't a
+                // key we check here to see if it's a mouse event.
+                if self.rxvt && self.hold_keys.len() > 1 &&
+                    self.hold_keys[0].0[0] == b'['
+                {
+                    use self::escmouse::ParseResult as Mouse;
+
+                    self.mparse.reset(escmouse::Type::Urxvt);
+                    for i in 1..self.hold_keys.len() {
+                        let cp = self.hold_keys[i];
+                        match self.mparse.parse(cp.0[0]) {
+                            Mouse::No => return self.reset(),
+                            Mouse::Maybe => continue,
+                            Mouse::Found(evt) => return self.send_mouse(evt),
+                        }
+                    }
+                    self.hold_keys.clear();
+                    self.state = ParseState::Mouse(escmouse::Type::Urxvt);
+                    Ok(ParseOk::Continue)
+                } else {
+                    self.reset()
+                }
+            }
             Maybe => Ok(ParseOk::Continue),
             Found((k, m)) => {
-                let event = match self.state {
-                    ParseState::KeySeq2 => InputEvent::Key(k, m.add_alt()),
-                    _ => InputEvent::Key(k, m),
+                let m = match self.state {
+                    ParseState::Esc2 => m.add_alt(),
+                    _ => m,
                 };
                 self.hold_keys.clear();
                 self.state = ParseState::Init;
-                self.send(event)
+                self.send_key(k, m)
+            }
+            Mouse(mtype) => {
+                self.mparse.reset(mtype);
+                self.hold_keys.clear();
+                self.state = ParseState::Mouse(mtype);
+                Ok(ParseOk::Continue)
             }
         }
     }
@@ -485,8 +568,11 @@ impl Utf8Parser {
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod test {
+    use std::sync::mpsc::{Receiver, channel};
     use tinf::Desc;
+    use super::{Event, InputEvent, Key, Mod, Reader};
 
     fn desc() -> Desc {
         use tinf::cap::*;
@@ -495,7 +581,81 @@ mod test {
         ]
     }
 
+    fn desc_rxvt() -> Desc {
+        use tinf::cap::*;
+        desc![
+            "rxvt-unicode",
+            kf5 => b"\x1b[15~",
+        ]
+    }
+
+    fn extract_event(rx: &Receiver<Box<Event>>) -> InputEvent {
+        let evt = rx.recv().unwrap();
+        let in_evt = evt.as_any().downcast_ref::<InputEvent>().unwrap();
+        *in_evt
+    }
+
     #[test]
     fn esc() {
+        let expected = InputEvent::Key(Key::Esc, Mod::none());
+
+        let (tx, rx) = channel();
+        let desc = desc();
+        let mut rdr = Reader::new(&desc, tx);
+        rdr.parse_stdin(b"\x1b");
+        rdr.reset();
+        assert_eq!(expected, extract_event(&rx));
+    }
+
+    #[test]
+    fn alt_esc() {
+        let expected = InputEvent::Key(Key::Esc, Mod::alt());
+
+        let (tx, rx) = channel();
+        let desc = desc();
+        let mut rdr = Reader::new(&desc, tx);
+        rdr.parse_stdin(b"\x1b\x1b");
+        rdr.reset();
+        assert_eq!(expected, extract_event(&rx));
+
+        rdr.parse_stdin(b"\x1b");
+        rdr.parse_stdin(b"\x1b");
+        rdr.reset();
+        assert_eq!(expected, extract_event(&rx));
+    }
+
+    #[test]
+    fn esc_then_key() {
+        let expected = InputEvent::Key(Key::ascii(b'1'), Mod::alt());
+
+        let (tx, rx) = channel();
+        let desc = desc();
+        let mut rdr = Reader::new(&desc, tx);
+        rdr.parse_stdin(b"\x1b1");
+        rdr.reset();
+        assert_eq!(expected, extract_event(&rx));
+    }
+
+    #[test]
+    fn esc_then_seq() {
+        let expected1 = InputEvent::Key(Key::Esc, Mod::none());
+        let expected2 = InputEvent::Key(Key::F5, Mod::none());
+        let (tx, rx) = channel();
+        let desc = desc();
+        let mut rdr = Reader::new(&desc, tx);
+        rdr.parse_stdin(b"\x1b\x1b[15~");
+        assert_eq!(expected1, extract_event(&rx));
+        assert_eq!(expected2, extract_event(&rx));
+    }
+
+    #[test]
+    fn rxvt_esc_then_seq() {
+        let expected = InputEvent::Key(Key::F5, Mod::alt());
+
+        let (tx, rx) = channel();
+        let desc = desc_rxvt();
+        let mut rdr = Reader::new(&desc, tx);
+        rdr.parse_stdin(b"\x1b\x1b[15~");
+        assert_eq!(expected, extract_event(&rx));
     }
 }

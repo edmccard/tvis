@@ -3,11 +3,10 @@
 use std::ptr;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
-
+use libc;
 use tvis_util::Handle;
-
 use win32;
-use {SCREEN, Screen, Error, Event, Result};
+use {Error, Event, Result, Screen, SCREEN};
 
 pub struct ConsoleScreen {
     in_hndl: win32::Handle,
@@ -36,9 +35,9 @@ impl ConsoleScreen {
 
     fn set_mode(&mut self) -> Result<()> {
         let mut init_in_mode = 0u32;
-        if 0 ==
-            unsafe { win32::GetConsoleMode(self.in_hndl, &mut init_in_mode) }
-        {
+        if 0 == unsafe {
+            win32::GetConsoleMode(self.in_hndl, &mut init_in_mode)
+        } {
             return Error::ffi_err("GetConsoleMode failed");
         }
         let in_mode = init_in_mode | win32::ENABLE_MOUSE_INPUT |
@@ -75,7 +74,29 @@ impl ConsoleScreen {
     }
 }
 
-impl Screen for ConsoleScreen {}
+impl Screen for ConsoleScreen {
+    #[cfg(debug_assertions)]
+    fn log(&self, text: &str) {
+        let crlf = [13u8, 10u8];
+        let mut count: u32 = 0;
+        unsafe {
+            win32::WriteConsoleA(
+                self.out_hndl,
+                text.as_ptr() as *const _ as *const libc::c_void,
+                text.len() as u32,
+                &mut count,
+                ptr::null_mut(),
+            );
+            win32::WriteConsoleA(
+                self.out_hndl,
+                crlf.as_ptr() as *const _ as *const libc::c_void,
+                2,
+                &mut count,
+                ptr::null_mut(),
+            );
+        }
+    }
+}
 
 impl Drop for ConsoleScreen {
     fn drop(&mut self) {

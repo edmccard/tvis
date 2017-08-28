@@ -1,11 +1,11 @@
 #![cfg(windows)]
 
-use std::{ptr, result, time, thread};
-use std::sync::mpsc::{Sender, channel};
+use std::{ptr, thread, time};
+use std::sync::mpsc::{channel, Sender};
 
 use tvis_util::Handle;
 use win32;
-use input::InputEvent;
+use input::{InputEvent, Key, Mod};
 use {Error, Event, Result};
 
 const SHUTDOWN_KEY: u16 = 0x1111;
@@ -19,11 +19,12 @@ pub(crate) fn start_threads(tx: Sender<Box<Event>>) -> Result<()> {
         create_session_wnd()
             .and_then(|_| register_layout_hook())
             .and_then(|_| {
-                init_tx.send(Ok(()));
+                init_tx.send(Ok(())).unwrap();
                 run_message_pump();
                 Ok(())
             })
-            .or_else(|e| init_tx.send(Err(e)));
+            .or_else(|e| init_tx.send(Err(e)))
+            .unwrap();
     });
     init_rx.recv().unwrap()?;
     thread::spawn(move || raw_event_loop(tx));
@@ -180,6 +181,7 @@ fn raw_event_loop(tx: Sender<Box<Event>>) {
     };
     let in_hndl = Handle::Stdin.win_handle();
     let mut buffer: [win32::InputRecord; 128] = [Default::default(); 128];
+    let mut surrogate: Option<u16> = None;
     loop {
         let mut read_count = 0u32;
         let ok = unsafe {
@@ -208,31 +210,42 @@ fn raw_event_loop(tx: Sender<Box<Event>>) {
                 win32::KEY_EVENT => {
                     let kevt = unsafe { input.as_key_event() };
                     match kevt.virtual_key_code {
-                        // XXXX
-                        0x1b => return,
                         SHUTDOWN_KEY => return,
-                        SIGINT_KEY => Some(Box::new(InputEvent::Interrupt)),
-                        SIGQUIT_KEY => Some(Box::new(InputEvent::Break)),
-                        _ => process_key(kevt),
+                        SIGINT_KEY => Some(InputEvent::Interrupt),
+                        SIGQUIT_KEY => Some(InputEvent::Break),
+                        _ => {
+                            let uchar = kevt.uchar;
+                            if surrogate.is_some() &&
+                                (uchar >= 0xdc00 && uchar <= 0xdfff)
+                            {
+                                let s1 = surrogate.unwrap();
+                                surrogate = None;
+                                Some(surrogate_pair(s1, kevt))
+                            } else if uchar >= 0xd800 && uchar <= 0xdbff {
+                                surrogate = Some(uchar);
+                                None
+                            } else {
+                                process_key(kevt)
+                            }
+                        }
                     }
                 }
-                win32::WINDOW_BUFFER_SIZE_EVENT => {
-                    match scrn_size.update() {
-                        Ok(true) => Some(Box::new(InputEvent::Repaint)),
-                        Ok(false) => None,
-                        Err(_) => return,
-                    }
-                }
+                win32::WINDOW_BUFFER_SIZE_EVENT => match scrn_size.update() {
+                    Ok(true) => Some(InputEvent::Repaint),
+                    Ok(false) => None,
+                    Err(_) => return,
+                },
                 _ => unreachable!(),
             };
             if let Some(event) = event {
-                if tx.send(event).is_err() {
+                if tx.send(Box::new(event)).is_err() {
                     return;
                 }
             }
         }
     }
 }
+
 
 pub(crate) struct ScreenSize {
     hndl: win32::Handle,
@@ -297,9 +310,9 @@ impl ScreenSize {
             y: ::std::cmp::min(init_size.y + 1, max_win.y),
         };
         if size != self.size {
-            if 0 ==
-                unsafe { win32::SetConsoleScreenBufferSize(self.hndl, size) }
-            {
+            if 0 == unsafe {
+                win32::SetConsoleScreenBufferSize(self.hndl, size)
+            } {
                 return Error::ffi_err("SetConsoleScreenBufferSize failed");
             }
             self.size = size;
@@ -309,27 +322,90 @@ impl ScreenSize {
     }
 }
 
-fn reset_buffer_size(new_size: win32::Coord, hndl: win32::Handle) {
-    let max_win = unsafe { win32::GetLargestConsoleWindowSize(hndl) };
-    if max_win.x == 0 && max_win.y == 0 {
-        return;
-    }
-    let size = win32::Coord {
-        x: ::std::cmp::min(new_size.x + 1, max_win.x),
-        y: ::std::cmp::min(new_size.y + 1, max_win.y),
-    };
-    unsafe {
-        win32::SetConsoleScreenBufferSize(hndl, size);
-    }
-}
-
-fn process_mouse(input: &win32::MouseEventRecord) -> Option<Box<InputEvent>> {
+fn process_mouse(_: &win32::MouseEventRecord) -> Option<InputEvent> {
+    // XXX
     None
 }
 
-fn process_key(input: &win32::KeyEventRecord) -> Option<Box<InputEvent>> {
+fn surrogate_pair(s1: u16, kevt: &win32::KeyEventRecord) -> InputEvent {
+    let s1 = s1 as u32;
+    let s2 = kevt.uchar as u32;
+    let mut utf8 = [0u8; 4];
+    let c: u32 = 0x10000 | ((s1 - 0xd800) << 10) | (s2 - 0xdc00);
+    let c = ::std::char::from_u32(c).unwrap();
+    let len = c.encode_utf8(&mut utf8).len();
+    InputEvent::Key(
+        Key::Char(utf8, len as u8),
+        Mod::win32(kevt.control_key_state),
+    )
+}
+
+fn process_key(input: &win32::KeyEventRecord) -> Option<InputEvent> {
     if input.keydown == 0 {
         return None;
     }
-    Some(Box::new(InputEvent::Key))
+
+    let uc = input.uchar;
+    let mods = Mod::win32(input.control_key_state);
+    let (key, mods) = match input.virtual_key_code {
+        0x08 => (Key::BS, mods),
+        0x09 => (Key::Tab, mods),
+        0x0d => (Key::Enter, mods),
+        0x1b => (Key::Esc, mods),
+        0x21 => (Key::PgUp, mods),
+        0x22 => (Key::PgDn, mods),
+        0x23 => (Key::End, mods),
+        0x24 => (Key::Home, mods),
+        0x25 => (Key::Left, mods),
+        0x26 => (Key::Up, mods),
+        0x27 => (Key::Right, mods),
+        0x28 => (Key::Down, mods),
+        0x2d => (Key::Ins, mods),
+        0x2e => (Key::Del, mods),
+        0x70 => (Key::F1, mods),
+        0x71 => (Key::F2, mods),
+        0x72 => (Key::F3, mods),
+        0x73 => (Key::F4, mods),
+        0x74 => (Key::F5, mods),
+        0x75 => (Key::F6, mods),
+        0x76 => (Key::F7, mods),
+        0x77 => (Key::F8, mods),
+        0x78 => (Key::F9, mods),
+        0x79 => (Key::F10, mods),
+        0x7a => (Key::F11, mods),
+        0x7b => (Key::F12, mods),
+        _ => {
+            if uc == 0 {
+                return None;
+            } else if uc < 0x80 {
+                match uc {
+                    8 => (Key::BS, mods.sub_ctrl()),
+                    9 => (Key::Tab, mods.sub_ctrl()),
+                    13 => (Key::Enter, mods.sub_ctrl()),
+                    27 => (Key::Esc, mods.sub_ctrl()),
+                    b if b < 32 => (Key::ascii(b as u8 + 64), mods.add_ctrl()),
+                    _ => (Key::Char([uc as u8, 0, 0, 0], 1), mods),
+                }
+            } else if uc < 0x800 {
+                let key = Key::Char(
+                    [0xc0 | (uc >> 6) as u8, 0x80 | (uc & 0x3f) as u8, 0, 0],
+                    2,
+                );
+                (key, mods)
+            } else {
+                // Surrogate pairs have already been processed.
+                let key = Key::Char(
+                    [
+                        0xe0 | (uc >> 12) as u8,
+                        0x80 | ((uc >> 6) & 0x3f) as u8,
+                        0x80 | (uc & 0x3f) as u8,
+                        0,
+                    ],
+                    3,
+                );
+                (key, mods)
+            }
+        }
+    };
+    Some(InputEvent::Key(key, mods))
 }

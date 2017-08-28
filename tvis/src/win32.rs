@@ -104,7 +104,7 @@ impl InputRecord {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default ,Debug)]
 pub struct KeyEventRecord {
     pub keydown: Bool,
     pub repeat_count: u16,
@@ -286,6 +286,13 @@ extern "system" {
         flags: u32,
     ) -> Handle;
     pub fn TranslateMessage(msg: *const Msg) -> Bool;
+    pub fn WriteConsoleA(
+        console_output: Handle,
+        buffer: *const libc::c_void,
+        number_of_chars_to_write: u32,
+        number_of_chars_written: *mut u32,
+        reserved: *mut libc::c_void,
+    ) -> Handle;
     pub fn WriteConsoleInputW(
         console_input: Handle,
         buffer: *const InputRecord,

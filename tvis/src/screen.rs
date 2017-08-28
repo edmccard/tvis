@@ -59,7 +59,13 @@ impl TerminalScreen {
     }
 }
 
-impl Screen for TerminalScreen {}
+impl Screen for TerminalScreen {
+    #[cfg(debug_assertions)]
+    fn log(&self, text: &str) {
+        print!("{}", text);
+        println!("\r");
+    }
+}
 
 impl Drop for TerminalScreen {
     fn drop(&mut self) {

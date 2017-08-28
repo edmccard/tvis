@@ -36,21 +36,17 @@ fn main() {
         if let Some(evt) = evt.as_any().downcast_ref::<InputEvent>() {
             match *evt {
                 InputEvent::Interrupt => {
-                    println!("BYE!\r");
+                    screen.log("BYE!");
                     break;
                 }
                 InputEvent::Key(k, m) => {
                     if k == Key::Char([96, 0, 0, 0], 1) {
-                        println!("BYE!\r");
+                        screen.log("BYE!");
                         return;
                     }
-                    println!(
-                        "KEY {:?}{}\r",
-                        m,
-                        k,
-                    );
+                    screen.log(&format!("KEY {:?}{}\r", m, k,));
                 }
-                _ => println!("EVENT: {:?}\r", evt),
+                _ => screen.log(&format!("EVENT: {:?}\r", evt)),
             }
         }
     }

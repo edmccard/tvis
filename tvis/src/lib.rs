@@ -1,7 +1,7 @@
 extern crate libc;
-extern crate tvis_util;
 #[macro_use]
 extern crate tinf;
+extern crate tvis_util;
 
 use std::any::Any;
 use std::{error, fmt, io, result};
@@ -19,12 +19,15 @@ pub mod screen;
 #[path = "screen.rs"]
 pub mod screen;
 
-pub use input::{InputEvent, Key, Mod, MouseButton, ButtonMotion, WheelMotion};
+pub use input::{ButtonMotion, InputEvent, Key, Mod, MouseButton, WheelMotion};
 
 /////////////////////////////////////////////////////////////////
 static SCREEN: AtomicBool = ATOMIC_BOOL_INIT;
 
-pub trait Screen {}
+pub trait Screen {
+    #[cfg(debug_assertions)]
+    fn log(&self, text: &str);
+}
 
 pub trait Event: fmt::Debug + Send {
     fn as_any(&self) -> &Any;
@@ -53,7 +56,9 @@ enum ErrorImpl {
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
-        Error { inner: ErrorImpl::Io(err) }
+        Error {
+            inner: ErrorImpl::Io(err),
+        }
     }
 }
 
@@ -76,8 +81,7 @@ impl error::Error for Error {
 
     fn cause(&self) -> Option<&error::Error> {
         match self.inner {
-            ErrorImpl::Io(ref err) |
-            ErrorImpl::FFI(_, ref err) => Some(err),
+            ErrorImpl::Io(ref err) | ErrorImpl::FFI(_, ref err) => Some(err),
         }
     }
 }

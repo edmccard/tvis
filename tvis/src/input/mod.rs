@@ -48,6 +48,7 @@ pub enum Key {
     Right,
 }
 
+#[allow(dead_code)]
 impl Key {
     fn ascii(byte: u8) -> Key {
         Key::Char([byte, 0, 0, 0], 1)
@@ -98,6 +99,7 @@ impl fmt::Debug for Mod {
     }
 }
 
+#[allow(dead_code)]
 impl Mod {
     fn raw(mods: u8) -> Mod {
         Mod { mods }
@@ -115,22 +117,47 @@ impl Mod {
         Mod { mods: 2 }
     }
 
-    #[allow(dead_code)]
     fn shift() -> Mod {
         Mod { mods: 1 }
     }
 
-    #[allow(dead_code)]
     fn ctrl_alt() -> Mod {
         Mod { mods: 6 }
     }
 
     fn add_alt(&self) -> Mod {
-        Mod { mods: self.mods | 2 }
+        Mod {
+            mods: self.mods | 2,
+        }
+    }
+
+    fn add_ctrl(&self) -> Mod {
+        Mod {
+            mods: self.mods | 4,
+        }
+    }
+
+    fn sub_ctrl(&self) -> Mod {
+        Mod {
+            mods: self.mods & !4,
+        }
+    }
+
+    #[cfg(windows)]
+    fn win32(ckeys: u32) -> Mod {
+        let mut mods: u8 = 0;
+        if ckeys & 0b10000 != 0 {
+            mods += 1;
+        }
+        if ckeys & 0b11 != 0 {
+            mods += 2;
+        }
+        if ckeys & 0b1100 != 0 {
+            mods += 4;
+        }
+        Mod { mods }
     }
 }
-
-type KeyPress = (Key, Mod);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MouseButton {

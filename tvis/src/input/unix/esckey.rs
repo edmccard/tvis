@@ -1,8 +1,10 @@
 use tinf::{Desc, cap};
-use input::{KeyPress, Key, Mod};
+use input::{Key, Mod};
 use super::escmouse::{MOUSE_MAGIC, SGR_MAGIC};
 use super::escmouse::Type as MouseType;
 use super::escmouse::Parser as MouseParser;
+
+type KeyPress = (Key, Mod);
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C)]

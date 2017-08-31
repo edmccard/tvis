@@ -44,7 +44,7 @@ fn main() {
                         screen.log("BYE!");
                         return;
                     }
-                    screen.log(&format!("KEY {:?}{}\r", m, k,));
+                    screen.log(&format!("KEY {}{}\r", m, k,));
                 }
                 _ => screen.log(&format!("EVENT: {:?}\r", evt)),
             }

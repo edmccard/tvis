@@ -1,5 +1,7 @@
 extern crate libc;
 #[macro_use]
+extern crate bitflags;
+#[macro_use]
 extern crate tinf;
 extern crate tvis_util;
 
@@ -19,7 +21,7 @@ pub mod screen;
 #[path = "screen.rs"]
 pub mod screen;
 
-pub use input::{ButtonMotion, InputEvent, Key, Mod, MouseButton, WheelMotion};
+pub use input::{ButtonMotion, InputEvent, Key, Mods, MouseButton, WheelMotion};
 
 /////////////////////////////////////////////////////////////////
 static SCREEN: AtomicBool = ATOMIC_BOOL_INIT;

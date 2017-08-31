@@ -74,18 +74,24 @@ impl fmt::Display for Key {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct Mods: u8 {
+        const NO_MODS = 0;
+        const SHIFT = 0b001;
+        const ALT = 0b010;
+        const CTRL = 0b100;
+        const CTRL_ALT = CTRL.bits | ALT.bits;
+    }
+}
+
 
 // 0b001 = Shift
 // 0b010 = Alt
 // 0b100 = Control
-#[derive(Copy, Clone, Eq, PartialEq, Default)]
-pub struct Mod {
-    mods: u8,
-}
-
-impl fmt::Debug for Mod {
+impl fmt::Display for Mods {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let val = match self.mods {
+        let val = match self.bits {
             1 => "Shift-",
             2 => "Alt-",
             3 => "Alt-Shift-",
@@ -100,51 +106,9 @@ impl fmt::Debug for Mod {
 }
 
 #[allow(dead_code)]
-impl Mod {
-    fn raw(mods: u8) -> Mod {
-        Mod { mods }
-    }
-
-    fn none() -> Mod {
-        Mod { mods: 0 }
-    }
-
-    fn ctrl() -> Mod {
-        Mod { mods: 4 }
-    }
-
-    fn alt() -> Mod {
-        Mod { mods: 2 }
-    }
-
-    fn shift() -> Mod {
-        Mod { mods: 1 }
-    }
-
-    fn ctrl_alt() -> Mod {
-        Mod { mods: 6 }
-    }
-
-    fn add_alt(&self) -> Mod {
-        Mod {
-            mods: self.mods | 2,
-        }
-    }
-
-    fn add_ctrl(&self) -> Mod {
-        Mod {
-            mods: self.mods | 4,
-        }
-    }
-
-    fn sub_ctrl(&self) -> Mod {
-        Mod {
-            mods: self.mods & !4,
-        }
-    }
-
+impl Mods {
     #[cfg(windows)]
-    fn win32(ckeys: u32) -> Mod {
+    fn win32(ckeys: u32) -> Mods {
         let mut mods: u8 = 0;
         if ckeys & 0b10000 != 0 {
             mods += 1;
@@ -155,7 +119,7 @@ impl Mod {
         if ckeys & 0b1100 != 0 {
             mods += 4;
         }
-        Mod { mods }
+        Mods::from_bits(mods).unwrap()
     }
 }
 
@@ -184,10 +148,10 @@ pub enum InputEvent {
     Repaint,
     Interrupt,
     Break,
-    Mouse(ButtonMotion, MouseButton, Mod, Coords),
-    MouseWheel(WheelMotion, Mod),
-    MouseMove(Mod, Coords),
-    Key(Key, Mod),
+    Mouse(ButtonMotion, MouseButton, Mods, Coords),
+    MouseWheel(WheelMotion, Mods),
+    MouseMove(Mods, Coords),
+    Key(Key, Mods),
 }
 
 impl Event for InputEvent {

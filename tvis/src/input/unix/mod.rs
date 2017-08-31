@@ -5,9 +5,9 @@ use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use libc::{self, c_int};
-use tinf::{Desc, cap};
+use tinf::{cap, Desc};
 
-use input::{InputEvent, Key, Mod};
+use input::{InputEvent, Key, Mods};
 use {is_rxvt, Error, Event, Result};
 
 mod esckey;
@@ -227,7 +227,7 @@ impl Reader {
         }
     }
 
-    fn send_key(&self, k: Key, m: Mod) -> ParseResult {
+    fn send_key(&self, k: Key, m: Mods) -> ParseResult {
         self.send(InputEvent::Key(k, m))
     }
 
@@ -240,6 +240,7 @@ impl Reader {
     fn reset(&mut self) -> ParseResult {
         use self::ParseState::*;
         use self::escmouse::Type::*;
+        use input::ALT;
 
         match self.state {
             Init => (),
@@ -247,13 +248,13 @@ impl Reader {
                 // These input bytes were discarded when parsing
                 // switched from "key mode" to "mouse mode", so we
                 // manually recreate them.
-                self.send_key(Key::ascii(b'['), Mod::alt())?;
+                self.send_key(Key::ascii(b'['), ALT)?;
                 match ty {
                     Normal => {
-                        self.send_key(Key::ascii(b'M'), Mod::none())?;
+                        self.send_key(Key::ascii(b'M'), Mods::empty())?;
                     }
                     SGR => {
-                        self.send_key(Key::ascii(b'<'), Mod::none())?;
+                        self.send_key(Key::ascii(b'<'), Mods::empty())?;
                     }
                     Urxvt => (),
                     _ => unreachable!(),
@@ -263,13 +264,11 @@ impl Reader {
                     self.send_key(key, mods)?;
                 }
             }
-            Esc1 => {
-                if self.hold_keys.is_empty() {
-                    self.send_key(Key::Esc, Mod::none())?;
-                } else {
-                    self.reset_with_alt()?;
-                }
-            }
+            Esc1 => if self.hold_keys.is_empty() {
+                self.send_key(Key::Esc, Mods::empty())?;
+            } else {
+                self.reset_with_alt()?;
+            },
             Esc2 => {
                 self.hold_keys.insert(0, ([27, 0, 0, 0], 1));
                 self.reset_with_alt()?;
@@ -282,8 +281,9 @@ impl Reader {
     }
 
     fn reset_with_alt(&self) -> ParseResult {
+        use input::ALT;
         let (key, mods) = self.xlate_cp(self.hold_keys[0]);
-        self.send_key(key, mods.add_alt())?;
+        self.send_key(key, mods | ALT)?;
         for cp in &self.hold_keys[1..] {
             let (key, mods) = self.xlate_cp(*cp);
             self.send_key(key, mods)?;
@@ -313,7 +313,7 @@ impl Reader {
                 Utf8Result::Wait => return Ok(ParseOk::Wait),
                 Utf8Result::Err(cp, _) => {
                     self.reset()?;
-                    return self.send_key(Key::Err(cp.0, cp.1), Mod::none());
+                    return self.send_key(Key::Err(cp.0, cp.1), Mods::empty());
                 }
                 Utf8Result::Ok(cp, len) => {
                     pos += len as usize;
@@ -373,7 +373,7 @@ impl Reader {
 
         // Handle subsequent bytes of key sequences.
         if !self.rxvt && self.state == Esc2 {
-            self.send_key(Key::Esc, Mod::none())?;
+            self.send_key(Key::Esc, Mods::empty())?;
             self.state = Esc1;
         }
         self.hold_keys.push(cp);
@@ -382,6 +382,7 @@ impl Reader {
 
     fn search_key_seq(&mut self, cp: Utf8Val) -> ParseResult {
         use self::esckey::ParseResult::*;
+        use input::ALT;
 
         match self.kparse.search(cp.0[0]) {
             No => {
@@ -412,7 +413,7 @@ impl Reader {
             Maybe => Ok(ParseOk::Continue),
             Found((k, m)) => {
                 let m = match self.state {
-                    ParseState::Esc2 => m.add_alt(),
+                    ParseState::Esc2 => m | ALT,
                     _ => m,
                 };
                 self.hold_keys.clear();
@@ -430,16 +431,18 @@ impl Reader {
 
     // Translate ascii special chars (C-<char>, Esc, Tab, Enter, BS)
     // and pass through the rest as Key::Char
-    fn xlate_cp(&self, cp: Utf8Val) -> (Key, Mod) {
+    fn xlate_cp(&self, cp: Utf8Val) -> (Key, Mods) {
+        use input::CTRL;
+
         match cp.0[0] {
-            0 => (Key::ascii(32), Mod::ctrl()),
-            9 => (Key::Tab, Mod::none()),
-            13 => (Key::Enter, Mod::none()),
-            27 => (Key::Esc, Mod::none()),
-            b if b == self.bs => (Key::BS, Mod::none()),
-            b if b == self.cbs => (Key::BS, Mod::ctrl()),
-            b if b < b' ' => (Key::ascii(b + 64), Mod::ctrl()),
-            _ => (Key::Char(cp.0, cp.1), Mod::none()),
+            0 => (Key::ascii(32), CTRL),
+            9 => (Key::Tab, Mods::empty()),
+            13 => (Key::Enter, Mods::empty()),
+            27 => (Key::Esc, Mods::empty()),
+            b if b == self.bs => (Key::BS, Mods::empty()),
+            b if b == self.cbs => (Key::BS, CTRL),
+            b if b < b' ' => (Key::ascii(b + 64), CTRL),
+            _ => (Key::Char(cp.0, cp.1), Mods::empty()),
         }
     }
 }
@@ -572,9 +575,9 @@ impl Utf8Parser {
 #[cfg(test)]
 #[allow(unused_must_use)]
 mod test {
-    use std::sync::mpsc::{Receiver, channel};
+    use std::sync::mpsc::{channel, Receiver};
     use tinf::Desc;
-    use super::{Event, InputEvent, Key, Mod, Reader};
+    use super::{Event, InputEvent, Key, Mods, Reader};
 
     fn desc() -> Desc {
         use tinf::cap::*;
@@ -599,7 +602,7 @@ mod test {
 
     #[test]
     fn esc() {
-        let expected = InputEvent::Key(Key::Esc, Mod::none());
+        let expected = InputEvent::Key(Key::Esc, Mods::empty());
 
         let (tx, rx) = channel();
         let desc = desc();
@@ -611,7 +614,8 @@ mod test {
 
     #[test]
     fn alt_esc() {
-        let expected = InputEvent::Key(Key::Esc, Mod::alt());
+        use input::ALT;
+        let expected = InputEvent::Key(Key::Esc, ALT);
 
         let (tx, rx) = channel();
         let desc = desc();
@@ -628,7 +632,8 @@ mod test {
 
     #[test]
     fn esc_then_key() {
-        let expected = InputEvent::Key(Key::ascii(b'1'), Mod::alt());
+        use input::ALT;
+        let expected = InputEvent::Key(Key::ascii(b'1'), ALT);
 
         let (tx, rx) = channel();
         let desc = desc();
@@ -640,8 +645,8 @@ mod test {
 
     #[test]
     fn esc_then_seq() {
-        let expected1 = InputEvent::Key(Key::Esc, Mod::none());
-        let expected2 = InputEvent::Key(Key::F5, Mod::none());
+        let expected1 = InputEvent::Key(Key::Esc, Mods::empty());
+        let expected2 = InputEvent::Key(Key::F5, Mods::empty());
         let (tx, rx) = channel();
         let desc = desc();
         let mut rdr = Reader::new(&desc, tx);
@@ -652,7 +657,8 @@ mod test {
 
     #[test]
     fn rxvt_esc_then_seq() {
-        let expected = InputEvent::Key(Key::F5, Mod::alt());
+        use input::ALT;
+        let expected = InputEvent::Key(Key::F5, ALT);
 
         let (tx, rx) = channel();
         let desc = desc_rxvt();

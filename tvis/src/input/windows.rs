@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Sender};
 
 use tvis_util::Handle;
 use win32;
-use input::{InputEvent, Key, Mod};
+use input::{InputEvent, Key, Mods};
 use {Error, Event, Result};
 
 const SHUTDOWN_KEY: u16 = 0x1111;
@@ -336,17 +336,19 @@ fn surrogate_pair(s1: u16, kevt: &win32::KeyEventRecord) -> InputEvent {
     let len = c.encode_utf8(&mut utf8).len();
     InputEvent::Key(
         Key::Char(utf8, len as u8),
-        Mod::win32(kevt.control_key_state),
+        Mods::win32(kevt.control_key_state),
     )
 }
 
 fn process_key(input: &win32::KeyEventRecord) -> Option<InputEvent> {
+    use input::CTRL;
+
     if input.keydown == 0 {
         return None;
     }
 
     let uc = input.uchar;
-    let mods = Mod::win32(input.control_key_state);
+    let mods = Mods::win32(input.control_key_state);
     let (key, mods) = match input.virtual_key_code {
         0x08 => (Key::BS, mods),
         0x09 => (Key::Tab, mods),
@@ -379,11 +381,11 @@ fn process_key(input: &win32::KeyEventRecord) -> Option<InputEvent> {
                 return None;
             } else if uc < 0x80 {
                 match uc {
-                    8 => (Key::BS, mods.sub_ctrl()),
-                    9 => (Key::Tab, mods.sub_ctrl()),
-                    13 => (Key::Enter, mods.sub_ctrl()),
-                    27 => (Key::Esc, mods.sub_ctrl()),
-                    b if b < 32 => (Key::ascii(b as u8 + 64), mods.add_ctrl()),
+                    8 => (Key::BS, mods - CTRL),
+                    9 => (Key::Tab, mods - CTRL),
+                    13 => (Key::Enter, mods - CTRL),
+                    27 => (Key::Esc, mods - CTRL),
+                    b if b < 32 => (Key::ascii(b as u8 + 64), mods | CTRL),
                     _ => (Key::Char([uc as u8, 0, 0, 0], 1), mods),
                 }
             } else if uc < 0x800 {

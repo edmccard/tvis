@@ -1,4 +1,4 @@
-use {Key, Mod, MouseButton, InputEvent, ButtonMotion, WheelMotion};
+use {ButtonMotion, InputEvent, Key, Mods, MouseButton, WheelMotion};
 use super::EscNode;
 use super::esckey::Parser as KeyParser;
 
@@ -49,14 +49,15 @@ impl Parser {
     }
 
     pub(super) fn add_mouse_keys(nodes: &mut Vec<EscNode>) {
-        KeyParser::add_key_bytes(nodes, b"[M", (
-            Key::Char([0, 0, 0, 0], MOUSE_MAGIC),
-            Mod::none(),
-        ));
+        KeyParser::add_key_bytes(
+            nodes,
+            b"[M",
+            (Key::Char([0, 0, 0, 0], MOUSE_MAGIC), Mods::empty()),
+        );
         KeyParser::add_key_bytes(
             nodes,
             b"[<",
-            (Key::Char([0, 0, 0, 0], SGR_MAGIC), Mod::none()),
+            (Key::Char([0, 0, 0, 0], SGR_MAGIC), Mods::empty()),
         );
     }
 
@@ -113,16 +114,12 @@ impl Parser {
     fn parse_extended(&mut self, byte: u8) -> ParseResult {
         let sgr = self.ty == Type::SGR;
         match self.state {
-            State::NeedB => {
-                if !self.parse_ext_b(byte, sgr) {
-                    return ParseResult::No;
-                }
-            }
-            State::NeedX => {
-                if !self.parse_ext_x(byte) {
-                    return ParseResult::No;
-                }
-            }
+            State::NeedB => if !self.parse_ext_b(byte, sgr) {
+                return ParseResult::No;
+            },
+            State::NeedX => if !self.parse_ext_x(byte) {
+                return ParseResult::No;
+            },
             State::NeedY => {
                 return self.parse_ext_y(byte, sgr);
             }
@@ -209,7 +206,7 @@ impl Parser {
         use self::MouseButton::*;
         use self::ButtonMotion::*;
 
-        let mods = Mod::raw((byte >> 2) & 0b111);
+        let mods = Mods::from_bits((byte >> 2) & 0b111).unwrap();
         let byte = byte & 0b11100011;
         if byte > 95 {
             if byte == 96 {

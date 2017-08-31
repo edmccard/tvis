@@ -1,10 +1,10 @@
-use tinf::{Desc, cap};
-use input::{Key, Mod};
+use tinf::{cap, Desc};
+use input::{Key, Mods, NO_MODS};
 use super::escmouse::{MOUSE_MAGIC, SGR_MAGIC};
 use super::escmouse::Type as MouseType;
 use super::escmouse::Parser as MouseParser;
 
-type KeyPress = (Key, Mod);
+type KeyPress = (Key, Mods);
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C)]
@@ -149,14 +149,16 @@ impl Parser {
         match self.state {
             Plain(m) => {
                 match self.check(byte) {
-                    Found((k, Mod { mods: m1 })) => {
+                    Found((k, m1)) => {
                         self.reset();
                         match k {
                             Key::Char(_, MOUSE_MAGIC) => Mouse(Normal),
                             Key::Char(_, SGR_MAGIC) => Mouse(SGR),
                             _ => {
                                 // ignore "meta" bit
-                                Found((k, Mod::raw((m1 | m) & 7)))
+                                let m1 = m1.bits | (m & 7);
+                                let m1 = Mods::from_bits(m1).unwrap();
+                                Found((k, m1))
                             }
                         }
                     }
@@ -214,38 +216,37 @@ impl Parser {
     }
 }
 
-static APPKEYS: &'static [(cap::String, KeyPress)] =
-    &[
-        (cap::kcuu1, (Key::Up, Mod { mods: 0 })),
-        (cap::kcud1, (Key::Down, Mod { mods: 0 })),
-        (cap::kcub1, (Key::Left, Mod { mods: 0 })),
-        (cap::kcuf1, (Key::Right, Mod { mods: 0 })),
-        (cap::khome, (Key::Home, Mod { mods: 0 })),
-        (cap::kend, (Key::End, Mod { mods: 0 })),
-        (cap::kf1, (Key::F1, Mod { mods: 0 })),
-        (cap::kf2, (Key::F2, Mod { mods: 0 })),
-        (cap::kf3, (Key::F3, Mod { mods: 0 })),
-        (cap::kf4, (Key::F4, Mod { mods: 0 })),
-    ];
-static KEYS: &'static [(cap::String, KeyPress)] =
-    &[
-        (cap::kich1, (Key::Ins, Mod { mods: 0 })),
-        (cap::kdch1, (Key::Del, Mod { mods: 0 })),
-        (cap::kpp, (Key::PgUp, Mod { mods: 0 })),
-        (cap::knp, (Key::PgDn, Mod { mods: 0 })),
-        (cap::kf5, (Key::F5, Mod { mods: 0 })),
-        (cap::kf6, (Key::F6, Mod { mods: 0 })),
-        (cap::kf7, (Key::F7, Mod { mods: 0 })),
-        (cap::kf8, (Key::F8, Mod { mods: 0 })),
-        (cap::kf9, (Key::F9, Mod { mods: 0 })),
-        (cap::kf10, (Key::F10, Mod { mods: 0 })),
-        (cap::kf11, (Key::F11, Mod { mods: 0 })),
-        (cap::kf12, (Key::F12, Mod { mods: 0 })),
-    ];
+static APPKEYS: &'static [(cap::String, KeyPress)] = &[
+    (cap::kcuu1, (Key::Up, NO_MODS)),
+    (cap::kcud1, (Key::Down, NO_MODS)),
+    (cap::kcub1, (Key::Left, NO_MODS)),
+    (cap::kcuf1, (Key::Right, NO_MODS)),
+    (cap::khome, (Key::Home, NO_MODS)),
+    (cap::kend, (Key::End, NO_MODS)),
+    (cap::kf1, (Key::F1, NO_MODS)),
+    (cap::kf2, (Key::F2, NO_MODS)),
+    (cap::kf3, (Key::F3, NO_MODS)),
+    (cap::kf4, (Key::F4, NO_MODS)),
+];
+static KEYS: &'static [(cap::String, KeyPress)] = &[
+    (cap::kich1, (Key::Ins, NO_MODS)),
+    (cap::kdch1, (Key::Del, NO_MODS)),
+    (cap::kpp, (Key::PgUp, NO_MODS)),
+    (cap::knp, (Key::PgDn, NO_MODS)),
+    (cap::kf5, (Key::F5, NO_MODS)),
+    (cap::kf6, (Key::F6, NO_MODS)),
+    (cap::kf7, (Key::F7, NO_MODS)),
+    (cap::kf8, (Key::F8, NO_MODS)),
+    (cap::kf9, (Key::F9, NO_MODS)),
+    (cap::kf10, (Key::F10, NO_MODS)),
+    (cap::kf11, (Key::F11, NO_MODS)),
+    (cap::kf12, (Key::F12, NO_MODS)),
+];
 
 #[cfg(test)]
 mod test {
-    use super::{Key, Mod, KeyPress, Parser, State, ParseResult, EscNode};
+    use super::{EscNode, Key, KeyPress, ParseResult, Parser, State};
+    use super::NO_MODS;
 
     fn node(s: i16, c: i16, b: u8) -> EscNode {
         EscNode {
@@ -290,8 +291,8 @@ mod test {
 
     #[test]
     fn add_one() {
-        let up_arr = (b"[A", (Key::Up, Mod::none()));
-        let down_arr = (b"[B", (Key::Down, Mod::none()));
+        let up_arr = (b"[A", (Key::Up, NO_MODS));
+        let down_arr = (b"[B", (Key::Down, NO_MODS));
         let mut built = empty_keys(false);
         Parser::add_key_bytes(&mut built.nodes, up_arr.0, up_arr.1);
         assert_eq!(search(&mut built, up_arr.0), Some(up_arr.1));
@@ -308,9 +309,9 @@ mod test {
 
     #[test]
     fn add_overlap() {
-        let f5 = (b"[15~", (Key::F5, Mod::none()));
-        let f6 = (b"[17~", (Key::F6, Mod::none()));
-        let f7 = (b"[18~", (Key::F7, Mod::none()));
+        let f5 = (b"[15~", (Key::F5, NO_MODS));
+        let f6 = (b"[17~", (Key::F6, NO_MODS));
+        let f7 = (b"[18~", (Key::F7, NO_MODS));
         let mut built = empty_keys(false);
         Parser::add_key_bytes(&mut built.nodes, f5.0, f5.1);
         Parser::add_key_bytes(&mut built.nodes, f6.0, f6.1);
@@ -335,8 +336,8 @@ mod test {
 
     #[test]
     fn add_disjoint() {
-        let f1 = (b"OP", (Key::F1, Mod::none()));
-        let f5 = (b"[15~", (Key::F5, Mod::none()));
+        let f1 = (b"OP", (Key::F1, NO_MODS));
+        let f5 = (b"[15~", (Key::F5, NO_MODS));
         let mut built = empty_keys(false);
         Parser::add_key_bytes(&mut built.nodes, f1.0, f1.1);
         Parser::add_key_bytes(&mut built.nodes, f5.0, f5.1);
@@ -357,11 +358,12 @@ mod test {
 
     #[test]
     fn mods() {
-        let f5 = (b"[15~", (Key::F5, Mod::none()));
-        let sf5 = (b"[15;2~", (Key::F5, Mod::shift()));
-        let acf5 = (b"[15;7~", (Key::F5, Mod::ctrl_alt()));
-        let mf5 = (b"[15;9~", (Key::F5, Mod::none()));
-        let macf5 = (b"[15;15~", (Key::F5, Mod::ctrl_alt()));
+        use input::{ALT, CTRL, SHIFT};
+        let f5 = (b"[15~", (Key::F5, NO_MODS));
+        let sf5 = (b"[15;2~", (Key::F5, SHIFT));
+        let acf5 = (b"[15;7~", (Key::F5, CTRL | ALT));
+        let mf5 = (b"[15;9~", (Key::F5, NO_MODS));
+        let macf5 = (b"[15;15~", (Key::F5, CTRL | ALT));
         let mut with_mods = empty_keys(true);
         Parser::add_key_bytes(&mut with_mods.nodes, f5.0, f5.1);
         assert_eq!(search(&mut with_mods, f5.0), Some(f5.1));

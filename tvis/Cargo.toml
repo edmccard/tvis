@@ -11,6 +11,7 @@ A console/terminal UI library (very alpha! such WIP!)
 [dependencies]
 tinf = { path = "../tinf", version = "^0" }
 tvis_util = { path = "../tvis_util", version = "^0" }
+bitflags = "0.9.1"
 libc = "0.2.23"
 
 [badges]

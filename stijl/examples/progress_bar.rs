@@ -20,7 +20,8 @@ fn main() {
 fn draw_progress(completion: f32) {
     let mut stream = stijl::stdout(DoStyle::Auto);
     let sz = stream.get_size();
-    stream.write_all(&progress_str(sz.cols as usize, completion));
+    // Use (cols - 1) for Windows 7 compatibility.
+    stream.write_all(&progress_str((sz.cols - 1) as usize, completion));
     stream.rewind_lines(1);
 }
 

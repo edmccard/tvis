@@ -1,16 +1,19 @@
-extern crate libc;
 #[macro_use]
 extern crate bitflags;
+#[cfg(windows)]
+extern crate kernel32;
+extern crate libc;
 #[macro_use]
 extern crate tinf;
 extern crate tvis_util;
+#[cfg(windows)]
+extern crate user32;
+#[cfg(windows)]
+extern crate winapi;
 
 use std::any::Any;
 use std::{error, fmt, io, result};
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
-
-#[cfg(windows)]
-mod win32;
 
 mod input;
 

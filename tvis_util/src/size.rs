@@ -1,3 +1,9 @@
+#[cfg(windows)]
+use winapi;
+#[cfg(windows)]
+use advapi32;
+#[cfg(windows)]
+use kernel32;
 use Handle;
 
 /// The dimensions of a terminal window.
@@ -18,16 +24,18 @@ impl Default for WinSize {
 /// Does not work in a Cygwin/MSYS2 window.
 #[cfg(windows)]
 pub fn get_size(handle: Handle) -> Option<WinSize> {
-    use win32;
+    use std::mem;
+
     let hndl = handle.win_handle();
-    let mut csbi: win32::ConsoleScreenBufferInfo = Default::default();
-    let res = unsafe { win32::GetConsoleScreenBufferInfo(hndl, &mut csbi) };
+    let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
+        unsafe { mem::uninitialized() };
+    let res = unsafe { kernel32::GetConsoleScreenBufferInfo(hndl, &mut csbi) };
     if res == 0 {
         return None;
     }
     Some(WinSize {
-        cols: (csbi.window.right - csbi.window.left + 1) as i32,
-        rows: (csbi.window.bottom - csbi.window.top + 1) as i32,
+        cols: (csbi.srWindow.Right - csbi.srWindow.Left + 1) as i32,
+        rows: (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as i32,
     })
 }
 
@@ -44,9 +52,8 @@ pub fn get_cygwin_size(w: &io::Write, defsz: WinSize) -> WinSize {
 /// The size of the terminal connected to the `handle`.
 #[cfg(not(windows))]
 pub fn get_size(handle: Handle) -> Option<WinSize> {
-    use libc;
-    let win: libc::winsize = unsafe { ::std::mem::uninitialized() };
-    let res = unsafe { libc::ioctl(handle.fd(), libc::TIOCGWINSZ, &win) };
+    let win: ::libc::winsize = unsafe { ::std::mem::uninitialized() };
+    let res = unsafe { ::libc::ioctl(handle.fd(), ::libc::TIOCGWINSZ, &win) };
     if res != 0 {
         return None;
     }
@@ -59,16 +66,14 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
 #[cfg(windows)]
 pub fn get_default_console_size() -> WinSize {
     use std::ptr;
-    use libc;
-    use win32;
 
-    let mut key: *mut libc::c_void = ptr::null_mut();
+    let mut key: winapi::HKEY = ptr::null_mut();
     let res = unsafe {
-        win32::RegOpenKeyExA(
-            win32::HKEY_CURRENT_USER,
-            "Console\x00".as_ptr(),
+        advapi32::RegOpenKeyExA(
+            winapi::HKEY_CURRENT_USER,
+            "Console\x00".as_ptr() as *const _ as winapi::LPCSTR,
             0,
-            win32::KEY_READ,
+            winapi::KEY_READ,
             &mut key,
         )
     };
@@ -78,9 +83,9 @@ pub fn get_default_console_size() -> WinSize {
     let mut data = 0u32;
     let mut data_size = 4u32;
     let res = unsafe {
-        win32::RegQueryValueExA(
+        advapi32::RegQueryValueExA(
             key,
-            "WindowSize\x00".as_ptr(),
+            "WindowSize\x00".as_ptr() as *const _ as winapi::LPCSTR,
             ptr::null_mut(),
             ptr::null_mut(),
             &mut data as *mut _ as *mut u8,
@@ -94,5 +99,4 @@ pub fn get_default_console_size() -> WinSize {
         cols: (data & 0xffff) as i32,
         rows: (data >> 16) as i32,
     }
-
 }

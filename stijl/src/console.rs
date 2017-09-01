@@ -1,16 +1,17 @@
 #![cfg(windows)]
 
 use std::io::{self, Write};
-use tvis_util::{Handle, ConsoleMode};
+use winapi;
+use kernel32;
+use tvis_util::{ConsoleMode, Handle};
 use tvis_util::size;
-use win32;
-use {Color, LockableStream, Result, CLIStream, Stream, DoStyle, WinSize};
+use {CLIStream, Color, DoStyle, LockableStream, Result, Stream, WinSize};
 
 
 /// A styled stream using the Windows Console API.
 pub struct ConStream<T> {
     w: T,
-    hndl: win32::Handle,
+    hndl: winapi::HANDLE,
     orig_pair: CPair,
     defsz: WinSize,
     do_style: bool,
@@ -32,7 +33,7 @@ impl ConStream<io::Stderr> {
 
 impl<T: Write> ConStream<T> {
     fn init(w: T, handle: Handle, do_style: DoStyle) -> ConStream<T> {
-        let hndl = unsafe { win32::GetStdHandle(handle as u32) };
+        let hndl = unsafe { kernel32::GetStdHandle(handle as winapi::DWORD) };
         let is_atty = handle.console_mode() != ConsoleMode::None;
         let do_style = is_atty && (do_style != DoStyle::Never);
         let orig_pair = match do_style {
@@ -61,7 +62,7 @@ impl<T: Write> ConStream<T> {
         if self.do_style {
             self.flush()?;
             let cur = get_colors(self.hndl);
-            let em_mask = cur.0 & win32::FOREGROUND_INTENSITY;
+            let em_mask = cur.0 & (winapi::FOREGROUND_INTENSITY as u16);
             set_colors(self.hndl, (fg.1 | em_mask, cur.1));
         }
         Ok(())
@@ -71,27 +72,30 @@ impl<T: Write> ConStream<T> {
         if self.do_style {
             self.flush()?;
             let cur = get_colors(self.hndl);
-            let fg = cur.0 | win32::FOREGROUND_INTENSITY;
+            let fg = cur.0 | (winapi::FOREGROUND_INTENSITY as u16);
             set_colors(self.hndl, (fg, cur.1));
         }
         Ok(())
     }
 
     fn rewind_lines(&mut self, count: u16) -> Result<()> {
-        let mut csbi: win32::ConsoleScreenBufferInfo = Default::default();
+        use std::mem;
+
+        let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
+            unsafe { mem::uninitialized() };
         unsafe {
-            win32::GetConsoleScreenBufferInfo(self.hndl, &mut csbi);
+            kernel32::GetConsoleScreenBufferInfo(self.hndl, &mut csbi);
         }
         self.flush()?;
-        let mut coord = csbi.cursor_position;
+        let mut coord = csbi.dwCursorPosition;
         if count > 0 {
-            coord.x = 0;
+            coord.X = 0;
         }
         if count > 1 {
-            coord.y -= ::std::cmp::min(count - 1, coord.y as u16) as i16;
+            coord.Y -= ::std::cmp::min(count - 1, coord.Y as u16) as i16;
         }
         unsafe {
-            win32::SetConsoleCursorPosition(self.hndl, coord);
+            kernel32::SetConsoleCursorPosition(self.hndl, coord);
         }
         Ok(())
     }
@@ -261,27 +265,31 @@ impl LockableStream for ConStream<io::Stderr> {
 }
 
 
-type CPair = (u16, u16);
+type CPair = (winapi::USHORT, winapi::USHORT);
 
 // Assumes `hndl` is a console screen buffer.
-fn get_colors(hndl: win32::Handle) -> CPair {
-    let mut csbi: win32::ConsoleScreenBufferInfo = Default::default();
+fn get_colors(hndl: winapi::HANDLE) -> CPair {
+    use std::mem;
+
+    let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
+        unsafe { mem::uninitialized() };
     unsafe {
-        win32::GetConsoleScreenBufferInfo(hndl, &mut csbi);
+        kernel32::GetConsoleScreenBufferInfo(hndl, &mut csbi);
     }
-    (csbi.attributes & 0x7, (csbi.attributes & 0x70) >> 4)
+    (csbi.wAttributes & 0x7, (csbi.wAttributes & 0x70) >> 4)
 }
 
 // Assumes `hndl` is a console screen buffer.
-fn set_colors(hndl: win32::Handle, clrs: CPair) {
+fn set_colors(hndl: winapi::HANDLE, clrs: CPair) {
     unsafe {
-        win32::SetConsoleTextAttribute(hndl, clrs.0 | ((clrs.1) << 4));
+        kernel32::SetConsoleTextAttribute(hndl, clrs.0 | ((clrs.1) << 4));
     }
 }
 
 lazy_static! {
     static ref ORIG_PAIR: CPair = {
-        let hndl = unsafe { win32::GetStdHandle(Handle::Stdout as u32) };
+        let hndl =
+            unsafe { kernel32::GetStdHandle(Handle::Stdout as winapi::DWORD) };
         match Handle::Stdout.console_mode() {
             ConsoleMode::None => (7, 0),
             _ => get_colors(hndl),

@@ -121,14 +121,16 @@ extern crate tinf;
 #[cfg(windows)]
 #[macro_use]
 extern crate lazy_static;
+#[cfg(windows)]
+extern crate winapi;
+#[cfg(windows)]
+extern crate kernel32;
 
 use std::{error, fmt, io};
 use tvis_util::Handle;
 pub use tvis_util::TerminalMode;
 pub use tvis_util::size::WinSize;
 
-#[cfg(windows)]
-mod win32;
 #[cfg(windows)]
 mod console;
 #[cfg(windows)]

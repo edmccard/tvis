@@ -1,9 +1,13 @@
 extern crate libc;
+#[cfg(windows)]
+extern crate winapi;
+#[cfg(windows)]
+extern crate kernel32;
+#[cfg(windows)]
+extern crate advapi32;
 
 mod mode;
 pub mod size;
-#[cfg(windows)]
-mod win32;
 
 pub use mode::TerminalMode;
 #[cfg(windows)]
@@ -19,13 +23,13 @@ pub enum Handle {
 }
 
 #[cfg(windows)]
-pub type WinHandle = *mut libc::c_void;
+pub type WinHandle = winapi::HANDLE;
 
 impl Handle {
     /// The raw Windows handle for the given `handle`.
     #[cfg(windows)]
-    pub fn win_handle(self) -> *mut libc::c_void {
-        unsafe { win32::GetStdHandle(self as u32) }
+    pub fn win_handle(self) -> winapi::HANDLE {
+        unsafe { kernel32::GetStdHandle(self as winapi::DWORD) }
     }
 
     /// The raw fd for the given `handle`.

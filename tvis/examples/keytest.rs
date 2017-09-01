@@ -35,10 +35,6 @@ fn main() {
     for evt in rx.iter() {
         if let Some(evt) = evt.as_any().downcast_ref::<InputEvent>() {
             match *evt {
-                InputEvent::Interrupt => {
-                    screen.log("BYE!");
-                    break;
-                }
                 InputEvent::Key(k, m) => {
                     if k == Key::Char([96, 0, 0, 0], 1) {
                         screen.log("BYE!");
@@ -50,6 +46,8 @@ fn main() {
             }
         }
     }
+    screen.log("SHUTTING DOWN\r");
+    ::std::thread::sleep(::std::time::Duration::from_secs(3));
 
     // should make sure not redirected or cygwin
     // loop {

@@ -13,7 +13,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tvis_util = "0.3.1"
+tvis_util = "0.3.2"
 ```
 
 and this to your crate root:

@@ -1,7 +1,8 @@
-use libc;
 use Handle;
 #[cfg(windows)]
-use win32;
+use winapi;
+#[cfg(windows)]
+use kernel32;
 
 // Based on https://github.com/dtolnay/isatty.
 
@@ -27,7 +28,7 @@ pub enum TerminalMode {
 impl TerminalMode {
     #[cfg(not(windows))]
     pub(super) fn from_handle(handle: Handle) -> TerminalMode {
-        match unsafe { libc::isatty(handle.fd()) } {
+        match unsafe { ::libc::isatty(handle.fd()) } {
             0 => TerminalMode::Redir,
             _ => TerminalMode::Term,
         }
@@ -35,15 +36,13 @@ impl TerminalMode {
 
     #[cfg(windows)]
     pub(super) fn from_handle(handle: Handle) -> TerminalMode {
-        use win32;
-
         match handle.console_mode() {
             ConsoleMode::Legacy => return TerminalMode::Console,
             ConsoleMode::Win10 => return TerminalMode::Win10,
             ConsoleMode::None => (),
         }
 
-        let hndl = unsafe { win32::GetStdHandle(handle as u32) };
+        let hndl = unsafe { kernel32::GetStdHandle(handle as winapi::DWORD) };
         match msys_cygwin(hndl) {
             Some(true) => TerminalMode::Cygwin,
             _ => TerminalMode::Redir,
@@ -53,18 +52,18 @@ impl TerminalMode {
 
 // Assumes console_mode(hndl) has already returned None.
 #[cfg(windows)]
-fn msys_cygwin(hndl: ::win32::Handle) -> Option<bool> {
+fn msys_cygwin(hndl: winapi::HANDLE) -> Option<bool> {
     use std::os::windows::ffi::OsStringExt;
 
-    let sz = ::std::mem::size_of::<win32::FileNameInfo>();
-    let mut raw_info = vec![0u8; sz + win32::MAX_PATH];
+    let sz = ::std::mem::size_of::<winapi::FILE_NAME_INFO>();
+    let mut raw_info = vec![0u8; sz + winapi::MAX_PATH];
 
     let ok = unsafe {
-        ::win32::GetFileInformationByHandleEx(
+        kernel32::GetFileInformationByHandleEx(
             hndl,
-            2,
-            raw_info.as_mut_ptr() as *mut libc::c_void,
-            raw_info.len() as u32,
+            winapi::FILE_INFO_BY_HANDLE_CLASS(2),
+            raw_info.as_mut_ptr() as winapi::LPVOID,
+            raw_info.len() as winapi::DWORD,
         )
     };
     if ok == 0 {
@@ -72,11 +71,11 @@ fn msys_cygwin(hndl: ::win32::Handle) -> Option<bool> {
     }
 
     let file_info =
-        unsafe { *(raw_info[0..sz].as_ptr() as *const win32::FileNameInfo) };
-    let name = &raw_info[sz..sz + file_info.file_name_length as usize];
+        unsafe { *(raw_info[0..sz].as_ptr() as *const winapi::FILE_NAME_INFO) };
+    let name = &raw_info[sz..sz + file_info.FileNameLength as usize];
     let name = unsafe {
         ::std::slice::from_raw_parts(
-            name.as_ptr() as *const win32::WChar,
+            name.as_ptr() as *const winapi::WCHAR,
             name.len() / 2,
         )
     };
@@ -103,24 +102,28 @@ pub enum ConsoleMode {
     Win10,
 }
 
+// winapi-rs omits these
+#[cfg(windows)]
+const ENABLE_VIRTUAL_TERMINAL_PROCESSING: winapi::DWORD = 0x0004;
+#[cfg(windows)]
+const ENABLE_VIRTUAL_TERMINAL_INPUT: winapi::DWORD = 0x0200;
+
 #[cfg(windows)]
 impl ConsoleMode {
-    pub(super) fn from_out_handle(hndl: win32::Handle) -> ConsoleMode {
-        use win32;
-
-        if hndl == win32::INVALID_HANDLE_VALUE {
+    pub(super) fn from_out_handle(hndl: winapi::HANDLE) -> ConsoleMode {
+        if hndl == winapi::INVALID_HANDLE_VALUE {
             return ConsoleMode::None;
         }
         unsafe {
-            let mut mode: u32 = 0;
-            if 0 == win32::GetConsoleMode(hndl, &mut mode) {
+            let mut mode: winapi::DWORD = 0;
+            if 0 == kernel32::GetConsoleMode(hndl, &mut mode) {
                 return ConsoleMode::None;
             }
-            if (mode & win32::ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0 {
+            if (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0 {
                 return ConsoleMode::Win10;
             }
-            mode |= win32::ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-            if 0 == win32::SetConsoleMode(hndl, mode) {
+            mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            if 0 == kernel32::SetConsoleMode(hndl, mode) {
                 ConsoleMode::Legacy
             } else {
                 ConsoleMode::Win10
@@ -128,23 +131,21 @@ impl ConsoleMode {
         }
     }
 
-    pub(super) fn from_in_handle(hndl: win32::Handle) -> ConsoleMode {
-        use win32;
-
-        if hndl == win32::INVALID_HANDLE_VALUE {
+    pub(super) fn from_in_handle(hndl: winapi::HANDLE) -> ConsoleMode {
+        if hndl == winapi::INVALID_HANDLE_VALUE {
             return ConsoleMode::None;
         }
         unsafe {
-            let mut mode: u32 = 0;
-            if 0 == win32::GetConsoleMode(hndl, &mut mode) {
+            let mut mode: winapi::DWORD = 0;
+            if 0 == kernel32::GetConsoleMode(hndl, &mut mode) {
                 return ConsoleMode::None;
             }
-            if (mode & win32::ENABLE_VIRTUAL_TERMINAL_INPUT) != 0 {
+            if (mode & ENABLE_VIRTUAL_TERMINAL_INPUT) != 0 {
                 return ConsoleMode::Win10;
             }
-            let newmode = mode | win32::ENABLE_VIRTUAL_TERMINAL_INPUT;
-            if 0 == win32::SetConsoleMode(hndl, newmode) {
-                win32::SetConsoleMode(hndl, mode);
+            let newmode = mode | ENABLE_VIRTUAL_TERMINAL_INPUT;
+            if 0 == kernel32::SetConsoleMode(hndl, newmode) {
+                kernel32::SetConsoleMode(hndl, mode);
                 ConsoleMode::Legacy
             } else {
                 ConsoleMode::Win10

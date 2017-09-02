@@ -77,7 +77,6 @@ impl fmt::Display for Key {
 bitflags! {
     #[derive(Default)]
     pub struct Mods: u8 {
-        const NO_MODS = 0;
         const SHIFT = 0b001;
         const ALT = 0b010;
         const CTRL = 0b100;

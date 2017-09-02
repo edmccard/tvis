@@ -2,6 +2,9 @@
 extern crate bitflags;
 #[cfg(windows)]
 extern crate kernel32;
+#[cfg(not(windows))]
+#[macro_use]
+extern crate lazy_static;
 extern crate libc;
 #[macro_use]
 extern crate tinf;
@@ -99,7 +102,7 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match self.inner {
             ErrorImpl::Io(ref err) | ErrorImpl::FFI(_, ref err) => Some(err),
-            _ => None
+            _ => None,
         }
     }
 }

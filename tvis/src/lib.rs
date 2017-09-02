@@ -14,6 +14,7 @@ extern crate winapi;
 use std::any::Any;
 use std::{error, fmt, io, result};
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
+use std::sync::mpsc::SendError;
 
 mod input;
 
@@ -57,6 +58,7 @@ impl Error {
 enum ErrorImpl {
     Io(io::Error),
     FFI(String, io::Error),
+    TX,
 }
 
 impl From<io::Error> for Error {
@@ -67,11 +69,20 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<SendError<Box<Event>>> for Error {
+    fn from(_: SendError<Box<Event>>) -> Error {
+        Error {
+            inner: ErrorImpl::TX,
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
             ErrorImpl::Io(ref err) => err.fmt(f),
             ErrorImpl::FFI(ref msg, _) => write!(f, "{}", msg),
+            ErrorImpl::TX => write!(f, "channel send error"),
         }
     }
 }
@@ -81,12 +92,14 @@ impl error::Error for Error {
         match self.inner {
             ErrorImpl::Io(ref err) => err.description(),
             ErrorImpl::FFI(..) => "terminal FFI error",
+            ErrorImpl::TX => "channel send error",
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match self.inner {
             ErrorImpl::Io(ref err) | ErrorImpl::FFI(_, ref err) => Some(err),
+            _ => None
         }
     }
 }

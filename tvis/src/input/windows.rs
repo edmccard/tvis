@@ -2,7 +2,7 @@
 
 use std::{ptr, thread, time};
 use std::sync::mpsc::{channel, Sender};
-use winapi;
+use winapi::{self, KEY_EVENT_RECORD};
 use kernel32;
 use user32;
 use tvis_util::Handle;
@@ -209,26 +209,29 @@ fn write_fake_key(key_code: u16) -> winapi::BOOL {
 }
 
 fn raw_event_loop(tx: Sender<Box<Event>>) {
-    let mut scrn_size = match ScreenSize::from_conout() {
-        Ok(c) => c,
-        _ => return,
-    };
+    // TODO: Handle FFI errors/channel send errors (until then, just
+    // exit when the event loop exits).
+    let _ = event_loop(tx);
+}
+
+fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
+    let mut scrn_size = ScreenSize::from_conout()?;
     let in_hndl = Handle::Stdin.win_handle();
     let mut buffer: [winapi::INPUT_RECORD; 128] =
         unsafe { ::std::mem::uninitialized() };
-    let mut surrogate: Option<u16> = None;
+    let mut key_reader = KeyReader::new(tx.clone());
     loop {
         let mut read_count: winapi::DWORD = 0;
-        let ok = unsafe {
-            kernel32::ReadConsoleInputW(
+        unsafe {
+            if kernel32::ReadConsoleInputW(
                 in_hndl,
                 buffer.as_mut_ptr(),
                 128,
                 &mut read_count,
-            )
-        };
-        if ok == 0 {
-            return;
+            ) == 0
+            {
+                return Error::ffi_err("ReadConsoleInputW failed");
+            }
         }
         for i in 0..read_count as usize {
             let input = buffer[i];
@@ -237,47 +240,171 @@ fn raw_event_loop(tx: Sender<Box<Event>>) {
             {
                 continue;
             }
-            let event = match input.EventType {
+            match input.EventType {
                 winapi::MOUSE_EVENT => {
                     let mevt = unsafe { input.MouseEvent() };
-                    process_mouse(mevt)
+                    process_mouse(mevt);
                 }
                 winapi::KEY_EVENT => {
                     let kevt = unsafe { input.KeyEvent() };
                     match kevt.wVirtualKeyCode {
-                        SHUTDOWN_KEY => return,
-                        SIGINT_KEY => Some(InputEvent::Interrupt),
-                        SIGQUIT_KEY => Some(InputEvent::Break),
-                        _ => {
-                            let uchar = kevt.UnicodeChar;
-                            if surrogate.is_some() &&
-                                (uchar >= 0xdc00 && uchar <= 0xdfff)
-                            {
-                                let s1 = surrogate.unwrap();
-                                surrogate = None;
-                                Some(surrogate_pair(s1, kevt))
-                            } else if uchar >= 0xd800 && uchar <= 0xdbff {
-                                surrogate = Some(uchar);
-                                None
-                            } else {
-                                process_key(kevt)
-                            }
-                        }
+                        SHUTDOWN_KEY => return Ok(()),
+                        SIGINT_KEY => tx.send(Box::new(InputEvent::Interrupt))?,
+                        SIGQUIT_KEY => tx.send(Box::new(InputEvent::Break))?,
+                        _ => key_reader.read(kevt)?,
                     }
                 }
-                winapi::WINDOW_BUFFER_SIZE_EVENT => match scrn_size.update() {
-                    Ok(true) => Some(InputEvent::Repaint),
-                    Ok(false) => None,
-                    Err(_) => return,
+                winapi::WINDOW_BUFFER_SIZE_EVENT => if scrn_size.update()? {
+                    tx.send(Box::new(InputEvent::Repaint))?;
                 },
                 _ => unreachable!(),
             };
-            if let Some(event) = event {
-                if tx.send(Box::new(event)).is_err() {
-                    return;
-                }
+        }
+    }
+}
+
+struct KeyReader {
+    surrogate: Option<u16>,
+    tx: Sender<Box<Event>>,
+}
+
+impl KeyReader {
+    fn new(tx: Sender<Box<Event>>) -> KeyReader {
+        KeyReader {
+            surrogate: None,
+            tx,
+        }
+    }
+
+    fn send(&self, event: InputEvent) -> Result<()> {
+        self.tx.send(Box::new(event))?;
+        Ok(())
+    }
+
+    fn read(&mut self, evt: &KEY_EVENT_RECORD) -> Result<()> {
+        if self.surrogate_pair(evt)? {
+            return Ok(());
+        }
+        if evt.bKeyDown == 0 {
+            return Ok(());
+        }
+        if self.special_key(evt)? {
+            return Ok(());
+        }
+        self.key(evt)
+    }
+
+    fn surrogate_pair(&mut self, evt: &KEY_EVENT_RECORD) -> Result<bool> {
+        let s2 = evt.UnicodeChar as u32;
+        if let Some(s1) = self.surrogate.take() {
+            if s2 >= 0xdc00 && s2 <= 0xdfff {
+                let s1 = s1 as u32;
+                let mut utf8 = [0u8; 4];
+                let c: u32 = 0x10000 | ((s1 - 0xd800) << 10) | (s2 - 0xdc00);
+                let c = ::std::char::from_u32(c).unwrap();
+                let len = c.encode_utf8(&mut utf8).len();
+                let kevt = InputEvent::Key(
+                    Key::Char(utf8, len as u8),
+                    Mods::win32(evt.dwControlKeyState),
+                );
+                self.send(kevt)?;
+                return Ok(true);
+            } else {
+                let err = Key::Err(
+                    [
+                        0xe0 | (s2 >> 12) as u8,
+                        0x80 | ((s2 >> 6) & 0x3f) as u8,
+                        0x80 | (s2 & 0x3f) as u8,
+                        0,
+                    ],
+                    3,
+                );
+                self.send(InputEvent::Key(err, Mods::empty()))?;
             }
         }
+        if s2 >= 0xd800 && s2 <= 0xdbff {
+            self.surrogate = Some(s2 as u16);
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    fn special_key(&self, evt: &KEY_EVENT_RECORD) -> Result<bool> {
+        let skey = match evt.wVirtualKeyCode {
+            0x08 => Key::BS,
+            0x09 => Key::Tab,
+            0x0d => Key::Enter,
+            0x1b => Key::Esc,
+            0x21 => Key::PgUp,
+            0x22 => Key::PgDn,
+            0x23 => Key::End,
+            0x24 => Key::Home,
+            0x25 => Key::Left,
+            0x26 => Key::Up,
+            0x27 => Key::Right,
+            0x28 => Key::Down,
+            0x2d => Key::Ins,
+            0x2e => Key::Del,
+            0x70 => Key::F1,
+            0x71 => Key::F2,
+            0x72 => Key::F3,
+            0x73 => Key::F4,
+            0x74 => Key::F5,
+            0x75 => Key::F6,
+            0x76 => Key::F7,
+            0x77 => Key::F8,
+            0x78 => Key::F9,
+            0x79 => Key::F10,
+            0x7a => Key::F11,
+            0x7b => Key::F12,
+            _ => return Ok(false),
+        };
+        self.send(InputEvent::Key(skey, Mods::win32(evt.dwControlKeyState)))?;
+        Ok(true)
+    }
+
+    fn key(&self, evt: &KEY_EVENT_RECORD) -> Result<()> {
+        use input::CTRL;
+
+        let uc = evt.UnicodeChar;
+        let mods = Mods::win32(evt.dwControlKeyState);
+        let (key, mods) = if uc == 0 {
+            return Ok(());
+        } else if uc < 0x80 {
+            match uc {
+                3 => return self.send(InputEvent::Interrupt),
+                8 => (Key::BS, mods - CTRL),
+                9 => (Key::Tab, mods - CTRL),
+                13 => (Key::Enter, mods - CTRL),
+                27 => (Key::Esc, mods - CTRL),
+                b if b < 32 => (Key::ascii(b as u8 + 64), mods | CTRL),
+                _ => (Key::Char([uc as u8, 0, 0, 0], 1), mods),
+            }
+        } else if uc < 0x800 {
+            (
+                Key::Char(
+                    [0xc0 | (uc >> 6) as u8, 0x80 | (uc & 0x3f) as u8, 0, 0],
+                    2,
+                ),
+                mods,
+            )
+        } else {
+            // Surrogate pairs have already been handled.
+            (
+                Key::Char(
+                    [
+                        0xe0 | (uc >> 12) as u8,
+                        0x80 | ((uc >> 6) & 0x3f) as u8,
+                        0x80 | (uc & 0x3f) as u8,
+                        0,
+                    ],
+                    3,
+                ),
+                mods,
+            )
+        };
+        self.send(InputEvent::Key(key, mods))?;
+        Ok(())
     }
 }
 
@@ -375,90 +502,4 @@ impl ScreenSize {
 fn process_mouse(_: &winapi::MOUSE_EVENT_RECORD) -> Option<InputEvent> {
     // XXX
     None
-}
-
-fn surrogate_pair(s1: u16, kevt: &winapi::KEY_EVENT_RECORD) -> InputEvent {
-    let s1 = s1 as u32;
-    let s2 = kevt.UnicodeChar as u32;
-    let mut utf8 = [0u8; 4];
-    let c: u32 = 0x10000 | ((s1 - 0xd800) << 10) | (s2 - 0xdc00);
-    let c = ::std::char::from_u32(c).unwrap();
-    let len = c.encode_utf8(&mut utf8).len();
-    InputEvent::Key(
-        Key::Char(utf8, len as u8),
-        Mods::win32(kevt.dwControlKeyState),
-    )
-}
-
-fn process_key(input: &winapi::KEY_EVENT_RECORD) -> Option<InputEvent> {
-    use input::CTRL;
-
-    if input.bKeyDown == 0 {
-        return None;
-    }
-
-    let uc = input.UnicodeChar;
-    let mods = Mods::win32(input.dwControlKeyState);
-    let (key, mods) = match input.wVirtualKeyCode {
-        0x08 => (Key::BS, mods),
-        0x09 => (Key::Tab, mods),
-        0x0d => (Key::Enter, mods),
-        0x1b => (Key::Esc, mods),
-        0x21 => (Key::PgUp, mods),
-        0x22 => (Key::PgDn, mods),
-        0x23 => (Key::End, mods),
-        0x24 => (Key::Home, mods),
-        0x25 => (Key::Left, mods),
-        0x26 => (Key::Up, mods),
-        0x27 => (Key::Right, mods),
-        0x28 => (Key::Down, mods),
-        0x2d => (Key::Ins, mods),
-        0x2e => (Key::Del, mods),
-        0x70 => (Key::F1, mods),
-        0x71 => (Key::F2, mods),
-        0x72 => (Key::F3, mods),
-        0x73 => (Key::F4, mods),
-        0x74 => (Key::F5, mods),
-        0x75 => (Key::F6, mods),
-        0x76 => (Key::F7, mods),
-        0x77 => (Key::F8, mods),
-        0x78 => (Key::F9, mods),
-        0x79 => (Key::F10, mods),
-        0x7a => (Key::F11, mods),
-        0x7b => (Key::F12, mods),
-        _ => {
-            if uc == 0 {
-                return None;
-            } else if uc < 0x80 {
-                match uc {
-                    3 => return Some(InputEvent::Interrupt),
-                    8 => (Key::BS, mods - CTRL),
-                    9 => (Key::Tab, mods - CTRL),
-                    13 => (Key::Enter, mods - CTRL),
-                    27 => (Key::Esc, mods - CTRL),
-                    b if b < 32 => (Key::ascii(b as u8 + 64), mods | CTRL),
-                    _ => (Key::Char([uc as u8, 0, 0, 0], 1), mods),
-                }
-            } else if uc < 0x800 {
-                let key = Key::Char(
-                    [0xc0 | (uc >> 6) as u8, 0x80 | (uc & 0x3f) as u8, 0, 0],
-                    2,
-                );
-                (key, mods)
-            } else {
-                // Surrogate pairs have already been processed.
-                let key = Key::Char(
-                    [
-                        0xe0 | (uc >> 12) as u8,
-                        0x80 | ((uc >> 6) & 0x3f) as u8,
-                        0x80 | (uc & 0x3f) as u8,
-                        0,
-                    ],
-                    3,
-                );
-                (key, mods)
-            }
-        }
-    };
-    Some(InputEvent::Key(key, mods))
 }

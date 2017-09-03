@@ -220,6 +220,7 @@ fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
     let mut buffer: [winapi::INPUT_RECORD; 128] =
         unsafe { ::std::mem::uninitialized() };
     let mut key_reader = KeyReader::new(tx.clone());
+    let mut mouse_reader = MouseReader::new(tx.clone());
     loop {
         let mut read_count: winapi::DWORD = 0;
         unsafe {
@@ -243,7 +244,7 @@ fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
             match input.EventType {
                 winapi::MOUSE_EVENT => {
                     let mevt = unsafe { input.MouseEvent() };
-                    process_mouse(mevt);
+                    mouse_reader.read(mevt)?
                 }
                 winapi::KEY_EVENT => {
                     let kevt = unsafe { input.KeyEvent() };
@@ -408,6 +409,92 @@ impl KeyReader {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct Btn: u32 {
+        const LEFT = 0x01;
+        const RIGHT = 0x02;
+        const MIDDLE = 0x04;
+    }
+}
+
+pub struct MouseReader {
+    tx: Sender<Box<Event>>,
+    btns: Btn,
+}
+
+impl MouseReader {
+    fn new(tx: Sender<Box<Event>>) -> MouseReader {
+        MouseReader {
+            tx,
+            btns: Btn::empty(),
+        }
+    }
+
+    fn send(&self, event: InputEvent) -> Result<()> {
+        self.tx.send(Box::new(event))?;
+        Ok(())
+    }
+
+    fn read(&mut self, evt: &winapi::MOUSE_EVENT_RECORD) -> Result<()> {
+        use ButtonMotion::*;
+        use MouseButton::*;
+        use WheelMotion::*;
+
+        let coords = (
+            (evt.dwMousePosition.X as u32) + 1,
+            (evt.dwMousePosition.Y as u32) + 1,
+        );
+        let mods = Mods::win32(evt.dwControlKeyState);
+        match evt.dwEventFlags {
+            0 | 2 => {
+                let new_btns = Btn::from_bits(evt.dwButtonState & 0x7).unwrap();
+                let presses = new_btns - self.btns;
+                let releases = self.btns - new_btns;
+                self.btns = new_btns;
+                if presses.contains(LEFT) {
+                    let mevt = InputEvent::Mouse(Press, Left, mods, coords);
+                    self.send(mevt)?;
+                }
+                if presses.contains(MIDDLE) {
+                    let mevt = InputEvent::Mouse(Press, Middle, mods, coords);
+                    self.send(mevt)?;
+                }
+                if presses.contains(RIGHT) {
+                    let mevt = InputEvent::Mouse(Press, Right, mods, coords);
+                    self.send(mevt)?;
+                }
+                if releases.contains(LEFT) {
+                    let mevt = InputEvent::Mouse(Release, Left, mods, coords);
+                    self.send(mevt)?;
+                }
+                if releases.contains(MIDDLE) {
+                    let mevt = InputEvent::Mouse(Release, Middle, mods, coords);
+                    self.send(mevt)?;
+                }
+                if releases.contains(RIGHT) {
+                    let mevt = InputEvent::Mouse(Release, Right, mods, coords);
+                    self.send(mevt)?;
+                }
+            }
+            1 => {
+                let mevt = InputEvent::MouseMove(mods, coords);
+                self.send(mevt)?;
+            }
+            4 => {
+                let mevt = if (evt.dwButtonState >> 16) < 0x8000 {
+                    InputEvent::MouseWheel(Up, mods)
+                } else {
+                    InputEvent::MouseWheel(Down, mods)
+                };
+                self.send(mevt)?;
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+}
+
 
 pub(crate) struct ScreenSize {
     hndl: winapi::HANDLE,
@@ -497,9 +584,4 @@ impl ScreenSize {
         }
         Ok(false)
     }
-}
-
-fn process_mouse(_: &winapi::MOUSE_EVENT_RECORD) -> Option<InputEvent> {
-    // XXX
-    None
 }

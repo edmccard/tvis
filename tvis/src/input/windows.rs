@@ -6,8 +6,8 @@ use winapi::{self, KEY_EVENT_RECORD};
 use kernel32;
 use user32;
 use tvis_util::Handle;
-use input::{InputEvent, Key, Mods};
-use {Error, Event, Result};
+use input::{Event, InputEvent, Key, Mods};
+use {Error, Result};
 
 const SHUTDOWN_KEY: u16 = 0x1111;
 const SIGINT_KEY: u16 = 0x2222;
@@ -152,7 +152,7 @@ fn register_layout_hook() -> Result<()> {
             unsafe { ::std::mem::uninitialized() };
         ir.EventType = winapi::WINDOW_BUFFER_SIZE_EVENT;
         {
-            let mut ir = unsafe { ir.WindowBufferSizeEvent_mut() };
+            let ir = unsafe { ir.WindowBufferSizeEvent_mut() };
             ir.dwSize.X = 0;
             ir.dwSize.Y = 0;
         }
@@ -214,6 +214,8 @@ fn raw_event_loop(tx: Sender<Box<Event>>) {
     let _ = event_loop(tx);
 }
 
+#[cfg_attr(feature = "cargo-clippy",
+           allow(needless_range_loop, needless_pass_by_value))]
 fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
     let mut scrn_size = ScreenSize::from_conout()?;
     let in_hndl = Handle::Stdin.win_handle();
@@ -296,12 +298,12 @@ impl KeyReader {
     }
 
     fn surrogate_pair(&mut self, evt: &KEY_EVENT_RECORD) -> Result<bool> {
-        let s2 = evt.UnicodeChar as u32;
+        let s2 = u32::from(evt.UnicodeChar);
         if let Some(s1) = self.surrogate.take() {
             if s2 >= 0xdc00 && s2 <= 0xdfff {
-                let s1 = s1 as u32;
+                let s1 = u32::from(s1);
                 let mut utf8 = [0u8; 4];
-                let c: u32 = 0x10000 | ((s1 - 0xd800) << 10) | (s2 - 0xdc00);
+                let c: u32 = 0x1_0000 | ((s1 - 0xd800) << 10) | (s2 - 0xdc00);
                 let c = ::std::char::from_u32(c).unwrap();
                 let len = c.encode_utf8(&mut utf8).len();
                 let kevt = InputEvent::Key(
@@ -437,9 +439,9 @@ impl MouseReader {
     }
 
     fn read(&mut self, evt: &winapi::MOUSE_EVENT_RECORD) -> Result<()> {
-        use ButtonMotion::*;
-        use MouseButton::*;
-        use WheelMotion::*;
+        use input::ButtonMotion::*;
+        use input::MouseButton::*;
+        use input::WheelMotion::*;
 
         let coords = (
             (evt.dwMousePosition.X as u32) + 1,

@@ -34,8 +34,8 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
         return None;
     }
     Some(WinSize {
-        cols: (csbi.srWindow.Right - csbi.srWindow.Left + 1) as i32,
-        rows: (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as i32,
+        cols: i32::from(csbi.srWindow.Right - csbi.srWindow.Left + 1),
+        rows: i32::from(csbi.srWindow.Bottom - csbi.srWindow.Top + 1),
     })
 }
 
@@ -58,8 +58,8 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
         return None;
     }
     Some(WinSize {
-        cols: win.ws_col as i32,
-        rows: win.ws_row as i32,
+        cols: i32::from(win.ws_col),
+        rows: i32::from(win.ws_row),
     })
 }
 

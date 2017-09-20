@@ -6,22 +6,24 @@ use std::sync::mpsc::Sender;
 use winapi;
 use kernel32;
 use tvis_util::Handle;
-use {Error, Event, Result, Screen, SCREEN};
+use input::Event;
+use term::{Screen, SCREEN};
+use {Error, Result};
 
-pub struct ConsoleScreen {
+pub struct Term {
     in_hndl: winapi::HANDLE,
     out_hndl: winapi::HANDLE,
     init_out_hndl: winapi::HANDLE,
     init_in_mode: Option<winapi::DWORD>,
 }
 
-impl ConsoleScreen {
+impl Term {
     pub fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
         // TODO: make sure console is not redirected, etc.
         if SCREEN.compare_and_swap(false, true, Ordering::SeqCst) {
             panic!("TODO: better singleton panic message");
         }
-        let mut screen = ConsoleScreen {
+        let mut screen = Term {
             in_hndl: Handle::Stdin.win_handle(),
             out_hndl: ptr::null_mut(),
             init_out_hndl: Handle::Stdout.win_handle(),
@@ -75,7 +77,7 @@ impl ConsoleScreen {
     }
 }
 
-impl Screen for ConsoleScreen {
+impl Screen for Term {
     #[cfg(debug_assertions)]
     fn log(&self, text: &str) {
         let crlf = [13u8, 10u8];
@@ -99,7 +101,7 @@ impl Screen for ConsoleScreen {
     }
 }
 
-impl Drop for ConsoleScreen {
+impl Drop for Term {
     fn drop(&mut self) {
         unsafe {
             if let Some(mode) = self.init_in_mode {

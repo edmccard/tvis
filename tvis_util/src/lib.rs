@@ -1,10 +1,11 @@
+#[cfg(not(windows))]
 extern crate libc;
 #[cfg(windows)]
-extern crate winapi;
+extern crate advapi32;
 #[cfg(windows)]
 extern crate kernel32;
 #[cfg(windows)]
-extern crate advapi32;
+extern crate winapi;
 
 mod mode;
 pub mod size;
@@ -17,9 +18,9 @@ pub use mode::ConsoleMode;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Handle {
-    Stdin = 0xfffffff6,
-    Stdout = 0xfffffff5,
-    Stderr = 0xfffffff4,
+    Stdin = 0xffff_fff6,
+    Stdout = 0xffff_fff5,
+    Stderr = 0xffff_fff4,
 }
 
 #[cfg(windows)]

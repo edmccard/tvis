@@ -1,4 +1,4 @@
-use {ButtonMotion, InputEvent, Key, Mods, MouseButton, WheelMotion};
+use input::{ButtonMotion, InputEvent, Key, Mods, MouseButton, WheelMotion};
 use super::EscNode;
 use super::esckey::Parser as KeyParser;
 
@@ -19,9 +19,9 @@ pub(super) enum ParseResult {
 
 #[derive(Copy, Clone, Debug)]
 enum State {
-    NeedB,
-    NeedX,
-    NeedY,
+    B,
+    X,
+    Y,
 }
 
 pub(super) const MOUSE_MAGIC: u8 = 10;
@@ -40,7 +40,7 @@ impl Parser {
     pub(super) fn new() -> Parser {
         Parser {
             ty: Type::Uninit,
-            state: State::NeedB,
+            state: State::B,
             param: 0,
             plen: 0,
             evt: InputEvent::Break,
@@ -63,7 +63,7 @@ impl Parser {
 
     pub(super) fn reset(&mut self, ty: Type) {
         self.ty = ty;
-        self.next_state(State::NeedB);
+        self.next_state(State::B);
     }
 
     fn next_state(&mut self, state: State) {
@@ -84,27 +84,27 @@ impl Parser {
         use self::ParseResult::*;
 
         match self.state {
-            State::NeedB => {
+            State::B => {
                 if byte < 32 {
                     return No;
                 }
                 if !self.x10_button(byte) {
                     return No;
                 }
-                self.state = State::NeedX;
+                self.state = State::X;
             }
-            State::NeedX => {
+            State::X => {
                 if byte < 33 {
                     return No;
                 }
-                self.x = (byte - 33) as u32;
-                self.state = State::NeedY;
+                self.x = u32::from(byte - 33);
+                self.state = State::Y;
             }
-            State::NeedY => {
+            State::Y => {
                 if byte < 33 {
                     return No;
                 }
-                self.set_coords((byte - 33) as u32);
+                self.set_coords(u32::from(byte - 33));
                 return self.mouse_event();
             }
         }
@@ -114,13 +114,13 @@ impl Parser {
     fn parse_extended(&mut self, byte: u8) -> ParseResult {
         let sgr = self.ty == Type::SGR;
         match self.state {
-            State::NeedB => if !self.parse_ext_b(byte, sgr) {
+            State::B => if !self.parse_ext_b(byte, sgr) {
                 return ParseResult::No;
             },
-            State::NeedX => if !self.parse_ext_x(byte) {
+            State::X => if !self.parse_ext_x(byte) {
                 return ParseResult::No;
             },
-            State::NeedY => {
+            State::Y => {
                 return self.parse_ext_y(byte, sgr);
             }
         }
@@ -136,7 +136,7 @@ impl Parser {
             if !self.x10_button(param + if sgr { 32 } else { 0 }) {
                 return false;
             }
-            self.next_state(State::NeedX);
+            self.next_state(State::X);
         } else if byte >= b'0' && byte <= b'9' {
             return self.update_param(byte, 255);
         } else {
@@ -151,7 +151,7 @@ impl Parser {
                 return false;
             }
             self.x = self.param;
-            self.next_state(State::NeedY);
+            self.next_state(State::Y);
         } else if byte >= b'0' && byte <= b'9' {
             if !self.update_param(byte, 9999) {
                 return false;
@@ -183,21 +183,21 @@ impl Parser {
                     _ => (),
                 }
             }
-            return self.mouse_event();
+            self.mouse_event()
         } else if byte >= b'0' && byte <= b'9' {
             if !self.update_param(byte, 9999) {
                 return ParseResult::No;
             }
-            return ParseResult::Maybe;
+            ParseResult::Maybe
         } else {
-            return ParseResult::No;
+            ParseResult::No
         }
     }
 
     fn update_param(&mut self, byte: u8, max: u32) -> bool {
         self.plen += 1;
         self.param *= 10;
-        self.param += (byte - b'0') as u32;
+        self.param += u32::from(byte - b'0');
         self.param <= max
     }
 
@@ -207,7 +207,7 @@ impl Parser {
         use self::ButtonMotion::*;
 
         let mods = Mods::from_bits((byte >> 2) & 0b111).unwrap();
-        let byte = byte & 0b11100011;
+        let byte = byte & 0b1110_0011;
         if byte > 95 {
             if byte == 96 {
                 self.evt = MouseWheel(WheelMotion::Up, mods);
@@ -221,17 +221,15 @@ impl Parser {
             } else {
                 return false;
             }
+        } else if byte > 63 {
+            self.evt = MouseMove(mods, (0, 0));
         } else {
-            if byte > 63 {
-                self.evt = MouseMove(mods, (0, 0));
-            } else {
-                self.evt = match byte & 0b11 {
-                    0 => Mouse(Press, Left, mods, (0, 0)),
-                    1 => Mouse(Press, Middle, mods, (0, 0)),
-                    2 => Mouse(Press, Right, mods, (0, 0)),
-                    3 => Mouse(Release, Unknown, mods, (0, 0)),
-                    _ => unreachable!(),
-                }
+            self.evt = match byte & 0b11 {
+                0 => Mouse(Press, Left, mods, (0, 0)),
+                1 => Mouse(Press, Middle, mods, (0, 0)),
+                2 => Mouse(Press, Right, mods, (0, 0)),
+                3 => Mouse(Release, Unknown, mods, (0, 0)),
+                _ => unreachable!(),
             }
         }
         true

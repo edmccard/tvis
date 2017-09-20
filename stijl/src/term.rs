@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use tinf::Desc;
 use tvis_util::{size, Handle, TerminalMode};
-use {Color, LockableStream, Result, CLIStream, Stream, DoStyle, WinSize};
+use {CLIStream, Color, DoStyle, LockableStream, Result, Stream, WinSize};
 
 /// A styled stream using terminfo escape sequences.
 ///
@@ -113,17 +113,15 @@ impl<T: io::Write> TermStream<T> {
 
         match mode {
             #[cfg(windows)]
-            Win10 => {
-                TermStream {
-                    cap_reset: b"\x1b[0m".to_vec(),
-                    cap_fg: b"\x1b[3%p1%dm".to_vec(),
-                    cap_em: b"\x1b[1m".to_vec(),
-                    cap_rewind: b"\x1b[%p1%dA".to_vec(),
-                    w,
-                    defsz: size::get_default_console_size(),
-                    mode: TerminalMode::Win10,
-                }
-            }
+            Win10 => TermStream {
+                cap_reset: b"\x1b[0m".to_vec(),
+                cap_fg: b"\x1b[3%p1%dm".to_vec(),
+                cap_em: b"\x1b[1m".to_vec(),
+                cap_rewind: b"\x1b[%p1%dA".to_vec(),
+                w,
+                defsz: size::get_default_console_size(),
+                mode: TerminalMode::Win10,
+            },
             _ => TermStream::new(w, Desc::current(), use_style, mode),
         }
     }
@@ -228,11 +226,11 @@ fn get_default_size(mode: TerminalMode, desc: &Desc) -> WinSize {
         _ => {
             let cols = match desc[cap::cols] {
                 0 | 0xffff => 80,
-                v => v as i32,
+                v => i32::from(v),
             };
             let rows = match desc[cap::lines] {
                 0 | 0xffff => 24,
-                v => v as i32,
+                v => i32::from(v),
             };
             WinSize { cols, rows }
         }

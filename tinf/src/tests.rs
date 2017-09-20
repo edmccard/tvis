@@ -18,8 +18,7 @@ fn desc_file() {
 #[test]
 fn desc_literal() {
     use super::cap::*;
-    let desc =
-        desc![
+    let desc = desc![
             "dumb", "80-column dumb tty",
             am => true,
             cols => 80,
@@ -66,8 +65,7 @@ fn desc_user_literal() {
 #[test]
 fn cap_string_names() {
     use super::cap::*;
-    let desc =
-        desc![
+    let desc = desc![
         "dumb", "80-column dumb tty",
         am => true,
         cols => 80,

@@ -55,9 +55,9 @@ pub mod cap;
 #[macro_use]
 mod print;
 
-pub use self::print::{CapError, Param, ToParamFromInt, ToParamFromStr, Vars,
-                      tparm, tputs};
-use self::cap::{Cap, ICap, CapName, UserDef};
+pub use self::print::{tparm, tputs, CapError, Param, ToParamFromInt,
+                      ToParamFromStr, Vars};
+use self::cap::{Cap, CapName, ICap, UserDef};
 
 
 /// The names and capabilities that make up a terminal description.
@@ -184,7 +184,7 @@ impl Desc {
     /// This returns an error if the input is not a valid terminfo
     /// description.
     pub fn parse(r: &mut Read) -> Result<Desc, DescError> {
-        let mut r = &mut AlignReader::new(r);
+        let r = &mut AlignReader::new(r);
 
         let header = r.read_words(6)?;
         if header[0] != 282 {
@@ -364,14 +364,11 @@ impl Desc {
         let mut names = HashSet::new();
         let mut exts: Vec<&UserDef> = Vec::new();
         for ecap in self.ext.iter().rev() {
-            match *ecap {
-                ICap::Bool(CapName::U(ref n), _) => {
-                    if !names.contains(n.name()) {
-                        exts.push(n);
-                        names.insert(n.name());
-                    }
+            if let ICap::Bool(CapName::U(ref n), _) = *ecap {
+                if !names.contains(n.name()) {
+                    exts.push(n);
+                    names.insert(n.name());
                 }
-                _ => (),
             }
         }
         exts
@@ -397,14 +394,11 @@ impl Desc {
         let mut names = HashSet::new();
         let mut exts: Vec<&UserDef> = Vec::new();
         for ecap in self.ext.iter().rev() {
-            match *ecap {
-                ICap::Num(CapName::U(ref n), _) => {
-                    if !names.contains(n.name()) {
-                        exts.push(n);
-                        names.insert(n.name());
-                    }
+            if let ICap::Num(CapName::U(ref n), _) = *ecap {
+                if !names.contains(n.name()) {
+                    exts.push(n);
+                    names.insert(n.name());
                 }
-                _ => (),
             }
         }
         exts
@@ -430,14 +424,11 @@ impl Desc {
         let mut names = HashSet::new();
         let mut exts: Vec<&UserDef> = Vec::new();
         for ecap in self.ext.iter().rev() {
-            match *ecap {
-                ICap::Str(CapName::U(ref n), _) => {
-                    if !names.contains(n.name()) {
-                        exts.push(n);
-                        names.insert(n.name());
-                    }
+            if let ICap::Str(CapName::U(ref n), _) = *ecap {
+                if !names.contains(n.name()) {
+                    exts.push(n);
+                    names.insert(n.name());
                 }
-                _ => (),
             }
         }
         exts
@@ -680,7 +671,7 @@ lazy_static! {
             .and_then(|t| if t.is_empty() { None } else { Some(t) })
             .and_then(|t| Desc::file(&t).ok())
             .and_then(|mut f| Desc::parse(&mut f).ok())
-            .unwrap_or(
+            .unwrap_or_else(||
                 desc![
                     "dumb", "80-column dumb tty",
                     cap::am => true,
@@ -718,15 +709,21 @@ pub struct DescError {
 }
 
 fn parse_error(msg: &str) -> DescError {
-    DescError { inner: DescErrorImpl::Parse(msg.to_owned()) }
+    DescError {
+        inner: DescErrorImpl::Parse(msg.to_owned()),
+    }
 }
 
 fn absent_error(name: &str) -> DescError {
-    DescError { inner: DescErrorImpl::Absent(name.to_owned()) }
+    DescError {
+        inner: DescErrorImpl::Absent(name.to_owned()),
+    }
 }
 
 fn name_error(name: &str) -> DescError {
-    DescError { inner: DescErrorImpl::Name(name.to_owned()) }
+    DescError {
+        inner: DescErrorImpl::Name(name.to_owned()),
+    }
 }
 
 #[derive(Debug)]
@@ -771,7 +768,9 @@ impl ::std::error::Error for DescError {
 
 impl From<io::Error> for DescError {
     fn from(err: io::Error) -> DescError {
-        DescError { inner: DescErrorImpl::Io(err) }
+        DescError {
+            inner: DescErrorImpl::Io(err),
+        }
     }
 }
 

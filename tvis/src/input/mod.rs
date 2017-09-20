@@ -1,8 +1,6 @@
 use std::any::Any;
 use std::fmt;
 
-use Event;
-
 #[cfg(windows)]
 #[path = "windows.rs"]
 mod platform;
@@ -15,6 +13,10 @@ pub(crate) use self::platform::start_threads;
 pub(crate) use self::platform::ScreenSize;
 
 use Coords;
+
+pub trait Event: fmt::Debug + Send {
+    fn as_any(&self) -> &Any;
+}
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum Key {
@@ -109,7 +111,7 @@ impl Mods {
     #[cfg(windows)]
     fn win32(ckeys: u32) -> Mods {
         let mut mods: u8 = 0;
-        if ckeys & 0b10000 != 0 {
+        if ckeys & 0b1_0000 != 0 {
             mods += 1;
         }
         if ckeys & 0b11 != 0 {

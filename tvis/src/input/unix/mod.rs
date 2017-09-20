@@ -7,8 +7,8 @@ use std::time::Instant;
 use libc::{self, c_int};
 use tinf::{cap, Desc};
 
-use input::{InputEvent, Key, Mods};
-use {is_rxvt, Error, Event, Result};
+use input::{Event, InputEvent, Key, Mods};
+use {is_rxvt, Error, Result};
 
 mod esckey;
 mod escmouse;
@@ -115,10 +115,8 @@ unsafe fn raw_event_loop(tx: Sender<Box<Event>>) {
             -1 => return,
             0 => {
                 timeout.tv_usec = 0;
-                if !override_timeout {
-                    if reader.reset().is_err() {
-                        return;
-                    }
+                if !override_timeout && reader.reset().is_err() {
+                    return;
                 }
             }
             _ => (),
@@ -151,7 +149,7 @@ unsafe fn raw_event_loop(tx: Sender<Box<Event>>) {
             // of waiting for partial input to be complete (and we're
             // on an OS where select doesn't decrement the timeout).
             if timeout.tv_usec != 0 {
-                let elapsed = (tstart.elapsed().subsec_nanos() / 1000) as i64;
+                let elapsed = i64::from(tstart.elapsed().subsec_nanos() / 1000);
                 if elapsed < WAIT_MICROS {
                     timeout.tv_usec = WAIT_MICROS - elapsed;
                 }

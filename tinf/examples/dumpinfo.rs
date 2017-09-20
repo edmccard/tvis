@@ -1,11 +1,11 @@
 extern crate tinf;
 
-use tinf::{Desc, cap};
+use tinf::{cap, Desc};
 
 fn main() {
     let desc = Desc::current();
     let names = desc.names();
-    if names.len() > 0 {
+    if !names.is_empty() {
         println!("{}", names[0]);
     }
     for b in cap::Boolean::iter() {

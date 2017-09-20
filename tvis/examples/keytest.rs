@@ -1,29 +1,13 @@
-extern crate tinf;
 extern crate tvis;
-extern crate tvis_util;
 
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::channel;
 
-#[cfg(windows)]
-use tvis::screen::ConsoleScreen;
-#[cfg(not(windows))]
-use tvis::screen::TerminalScreen;
-
-use tvis::{Event, InputEvent, Key, Result, Screen};
-
-#[cfg(windows)]
-fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
-    ConsoleScreen::init(tx)
-}
-
-#[cfg(not(windows))]
-fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
-    TerminalScreen::init(tx)
-}
+use tvis::term::Term;
+use tvis::input::{InputEvent, Key};
 
 fn main() {
     let (tx, rx) = channel();
-    let screen = match init(tx) {
+    let screen = match Term::init(tx) {
         Ok(o) => o,
         Err(e) => {
             println!("ERROR: {}", e);

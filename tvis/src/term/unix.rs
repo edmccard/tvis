@@ -5,23 +5,25 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use libc;
 use tinf::Desc;
-use {SCREEN, Screen, Error, Event, Result, is_rxvt};
+use input::Event;
+use term::{Screen, SCREEN};
+use {is_rxvt, Error, Result};
 
 
-pub struct TerminalScreen {
+pub struct Term {
     init_ios: Option<libc::termios>,
     rxvt: bool,
 }
 
-impl TerminalScreen {
+impl Term {
     pub fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
         // TODO: make sure console is not redirected, etc.
         if SCREEN.compare_and_swap(false, true, Ordering::SeqCst) {
             panic!("TODO: better singleton panic message");
         }
-        let mut screen = TerminalScreen {
+        let mut screen = Term {
             init_ios: None,
-            rxvt: is_rxvt(Desc::current())
+            rxvt: is_rxvt(Desc::current()),
         };
         screen.set_ios()?;
         screen.init_term()?;
@@ -59,7 +61,7 @@ impl TerminalScreen {
     }
 }
 
-impl Screen for TerminalScreen {
+impl Screen for Term {
     #[cfg(debug_assertions)]
     fn log(&self, text: &str) {
         print!("{}", text);
@@ -67,7 +69,7 @@ impl Screen for TerminalScreen {
     }
 }
 
-impl Drop for TerminalScreen {
+impl Drop for Term {
     fn drop(&mut self) {
         if let Some(init_ios) = self.init_ios {
             let stdout = io::stdout();

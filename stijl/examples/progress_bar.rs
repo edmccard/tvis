@@ -3,7 +3,7 @@
 extern crate stijl;
 use stijl::*;
 
-use std::{time, thread};
+use std::{thread, time};
 use std::io::{self, Cursor, Read, Write};
 
 fn main() {

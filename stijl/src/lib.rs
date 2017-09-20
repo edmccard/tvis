@@ -114,17 +114,16 @@
 #![cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 #![cfg_attr(feature = "cargo-clippy", allow(match_bool))]
 
-extern crate libc;
-extern crate tvis_util;
-#[macro_use]
-extern crate tinf;
+#[cfg(windows)]
+extern crate kernel32;
 #[cfg(windows)]
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate tinf;
+extern crate tvis_util;
 #[cfg(windows)]
 extern crate winapi;
-#[cfg(windows)]
-extern crate kernel32;
 
 use std::{error, fmt, io};
 use tvis_util::Handle;
@@ -308,13 +307,17 @@ enum ErrorImpl {
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
-        Error { inner: ErrorImpl::Io(err) }
+        Error {
+            inner: ErrorImpl::Io(err),
+        }
     }
 }
 
 impl From<::tinf::CapError> for Error {
     fn from(err: ::tinf::CapError) -> Error {
-        Error { inner: ErrorImpl::Cap(err) }
+        Error {
+            inner: ErrorImpl::Cap(err),
+        }
     }
 }
 

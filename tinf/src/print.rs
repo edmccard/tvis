@@ -33,9 +33,10 @@ impl<'a> Params<'a> {
             return Err(stx_error("param index must be 1-9"));
         }
         match self.0.get(idx - 1) {
-            None |
-            Some(&Param::Absent) => Err(run_error("unspecified parameter")),
-            Some(&ref p) => Ok(p.clone()),
+            None | Some(&Param::Absent) => {
+                Err(run_error("unspecified parameter"))
+            }
+            Some(p) => Ok(p.clone()),
         }
     }
 
@@ -219,7 +220,7 @@ impl<'a> CapReader<'a> {
             num = num.wrapping_mul(10).wrapping_add(d);
             found = true;
         }
-        if num >= 10000 {
+        if num >= 1_0000 {
             Err(stx_error("numeric literal too large"))
         } else {
             Ok(if found { Some(num) } else { None })
@@ -502,11 +503,9 @@ impl Formatter {
             '#' => self.alt = true,
             ' ' => self.space = true,
             '-' => self.align = LeftJust,
-            '0' => {
-                if self.align != LeftJust {
-                    self.align = ZeroPad;
-                }
-            }
+            '0' => if self.align != LeftJust {
+                self.align = ZeroPad;
+            },
             _ => unreachable!(),
         }
     }
@@ -648,21 +647,19 @@ pub fn tputs(
                 }
                 idx += 1;
             }
-            Dollar => {
-                if input[idx] == b'<' {
-                    output.write_all(&input[start..(idx - 1)])?;
-                    start = idx - 1;
-                    state = Number(0, Whole);
-                    idx += 1;
-                } else {
-                    state = Normal;
-                }
-            }
+            Dollar => if input[idx] == b'<' {
+                output.write_all(&input[start..(idx - 1)])?;
+                start = idx - 1;
+                state = Number(0, Whole);
+                idx += 1;
+            } else {
+                state = Normal;
+            },
             Number(ms, part) => {
                 match input[idx] {
                     c if c >= b'0' && c <= b'9' => {
                         idx += 1;
-                        let d = (c - b'0') as u32;
+                        let d = u32::from(c - b'0');
                         let x = ms.wrapping_mul(10).wrapping_add(d);
                         match part {
                             Whole => state = Number(x, Whole),
@@ -705,7 +702,7 @@ pub fn tputs(
                         }
                         None => {
                             output.flush()?;
-                            sleep(Duration::from_millis(ms as u64));
+                            sleep(Duration::from_millis(u64::from(ms)));
                         }
                     }
                     idx += 1;
@@ -730,15 +727,21 @@ pub struct CapError {
 }
 
 fn stx_error(msg: &str) -> CapError {
-    CapError { inner: CapErrorImpl::Stx(msg.to_owned()) }
+    CapError {
+        inner: CapErrorImpl::Stx(msg.to_owned()),
+    }
 }
 
 fn run_error(msg: &str) -> CapError {
-    CapError { inner: CapErrorImpl::Run(msg.to_owned()) }
+    CapError {
+        inner: CapErrorImpl::Run(msg.to_owned()),
+    }
 }
 
 fn var_error(c: char) -> CapError {
-    CapError { inner: CapErrorImpl::Run(format!("variable {} not set", c)) }
+    CapError {
+        inner: CapErrorImpl::Run(format!("variable {} not set", c)),
+    }
 }
 
 #[derive(Debug)]
@@ -753,8 +756,7 @@ impl ::std::fmt::Display for CapError {
         use self::CapErrorImpl::*;
         match self.inner {
             Io(ref err) => err.fmt(f),
-            Stx(ref msg) => write!(f, "{}", msg),
-            Run(ref msg) => write!(f, "{}", msg),
+            Stx(ref msg) | Run(ref msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -780,6 +782,8 @@ impl ::std::error::Error for CapError {
 
 impl From<io::Error> for CapError {
     fn from(err: io::Error) -> CapError {
-        CapError { inner: CapErrorImpl::Io(err) }
+        CapError {
+            inner: CapErrorImpl::Io(err),
+        }
     }
 }

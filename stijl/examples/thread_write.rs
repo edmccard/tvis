@@ -1,7 +1,6 @@
 #![allow(unused_must_use)]
 
 extern crate stijl;
-extern crate tinf;
 
 use std::io::Write;
 use std::thread;

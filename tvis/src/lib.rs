@@ -14,34 +14,13 @@ extern crate user32;
 #[cfg(windows)]
 extern crate winapi;
 
-use std::any::Any;
 use std::{error, fmt, io, result};
-use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
 use std::sync::mpsc::SendError;
 
-mod input;
-
-#[cfg(windows)]
-#[path = "screen_win.rs"]
-pub mod screen;
-#[cfg(not(windows))]
-#[path = "screen.rs"]
-pub mod screen;
-
-pub use input::{ButtonMotion, InputEvent, Key, Mods, MouseButton, WheelMotion};
+pub mod term;
+pub mod input;
 
 /////////////////////////////////////////////////////////////////
-static SCREEN: AtomicBool = ATOMIC_BOOL_INIT;
-
-pub trait Screen {
-    #[cfg(debug_assertions)]
-    fn log(&self, text: &str);
-}
-
-pub trait Event: fmt::Debug + Send {
-    fn as_any(&self) -> &Any;
-}
-
 pub type Coords = (u32, u32);
 
 #[derive(Debug)]
@@ -72,8 +51,8 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<SendError<Box<Event>>> for Error {
-    fn from(_: SendError<Box<Event>>) -> Error {
+impl From<SendError<Box<input::Event>>> for Error {
+    fn from(_: SendError<Box<input::Event>>) -> Error {
         Error {
             inner: ErrorImpl::TX,
         }

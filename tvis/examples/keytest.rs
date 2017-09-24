@@ -7,20 +7,12 @@ use tvis::input::{InputEvent, Key};
 
 fn main() {
     let (tx, rx) = channel();
-    let mut screen = match term::connect_with_input(tx) {
-        Ok(o) => o,
-        Err(e) => {
-            println!("ERROR: {}", e);
-            return;
-        }
-    };
-    match screen.start_input() {
-        Ok(()) => (),
-        Err(e) => {
-            screen.log(&format!("ERROR: {}", e));
-            return;
-        }
+    let mut screen = term::connect_with_input(tx).unwrap();
+    if !screen.is_tty_input() || !screen.is_tty_output() {
+        screen.log("input or output is not a terminal");
+        return;
     }
+    screen.start_input().unwrap();
     let _ = &screen;
 
     let size = screen.get_size().unwrap();

@@ -8,8 +8,11 @@ use kernel32;
 use tvis_util::{ConsoleMode, Handle};
 use tvis_util::size::get_size;
 use input::Event;
-use term::{Terminal, TERM, WinSize};
+use term::{Terminal, WinSize, TERM};
 use {Error, Result};
+
+// winapi omits this.
+const ENABLE_VIRTUAL_TERMINAL_INPUT: winapi::DWORD = 0x0200;
 
 pub struct Term {
     in_hndl: winapi::HANDLE,
@@ -17,7 +20,7 @@ pub struct Term {
     init_out_hndl: winapi::HANDLE,
     init_in_mode: Option<winapi::DWORD>,
     tx: Option<Sender<Box<Event>>>,
-    cmode: ConsoleMode,
+    cmode: (ConsoleMode, ConsoleMode),
 }
 
 impl Term {
@@ -33,11 +36,11 @@ impl Term {
             init_out_hndl: Handle::Stdout.win_handle(),
             init_in_mode: None,
             tx,
-            cmode: Handle::Stdout.console_mode(),
+            cmode: (
+                Handle::Stdout.console_mode(),
+                Handle::Stdin.console_mode(),
+            ),
         };
-        if term.cmode == ConsoleMode::None {
-            // TODO error?
-        }
         term.set_mode()?;
         term.set_buffer()?;
         Ok(Box::new(term))
@@ -50,12 +53,12 @@ impl Term {
         } {
             return Error::ffi_err("GetConsoleMode failed");
         }
-        let mut in_mode = init_in_mode | winapi::ENABLE_MOUSE_INPUT |
-            winapi::ENABLE_WINDOW_INPUT;
-        in_mode &= !winapi::ENABLE_PROCESSED_INPUT;
-        if self.cmode == ConsoleMode::Win10 {
-            in_mode &= !winapi::ENABLE_QUICK_EDIT_MODE;
-            in_mode |= winapi::ENABLE_EXTENDED_FLAGS;
+        let mut in_mode = init_in_mode | winapi::ENABLE_MOUSE_INPUT
+            | winapi::ENABLE_WINDOW_INPUT & !winapi::ENABLE_PROCESSED_INPUT;
+        if self.cmode.1 == ConsoleMode::Win10 {
+            in_mode = in_mode & !winapi::ENABLE_QUICK_EDIT_MODE
+                & !ENABLE_VIRTUAL_TERMINAL_INPUT
+                | winapi::ENABLE_EXTENDED_FLAGS;
         }
         if 0 == unsafe { kernel32::SetConsoleMode(self.in_hndl, in_mode) } {
             return Error::ffi_err("SetConsoleMode failed");
@@ -90,6 +93,14 @@ impl Term {
 }
 
 impl Terminal for Term {
+    fn is_tty_input(&self) -> bool {
+        self.cmode.1 != ConsoleMode::None
+    }
+
+    fn is_tty_output(&self) -> bool {
+        self.cmode.0 != ConsoleMode::None
+    }
+
     fn get_size(&self) -> Result<WinSize> {
         match get_size(Handle::Stdout) {
             Some(ws) => Ok(ws),

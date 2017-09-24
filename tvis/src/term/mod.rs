@@ -20,6 +20,8 @@ use self::platform::Term;
 static TERM: AtomicBool = ATOMIC_BOOL_INIT;
 
 pub trait Terminal {
+    fn is_tty_input(&self) -> bool;
+    fn is_tty_output(&self) -> bool;
     fn get_size(&self) -> Result<WinSize>;
     fn start_input(&mut self) -> Result<()>;
     #[cfg(debug_assertions)]

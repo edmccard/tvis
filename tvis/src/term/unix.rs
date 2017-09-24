@@ -5,10 +5,10 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use libc;
 use tinf::Desc;
-use tvis_util::Handle;
+use tvis_util::{Handle, TerminalMode};
 use tvis_util::size::get_size;
 use input::Event;
-use term::{Terminal, TERM, WinSize};
+use term::{Terminal, WinSize, TERM};
 use {is_rxvt, Error, Result};
 
 lazy_static! {
@@ -18,6 +18,7 @@ lazy_static! {
 pub(in term) struct Term<'a> {
     stdout: io::StdoutLock<'a>,
     init_ios: libc::termios,
+    tmode: (TerminalMode, TerminalMode),
     tx: Option<Sender<Box<Event>>>,
     rxvt: bool,
 }
@@ -35,6 +36,10 @@ impl<'a> Term<'a> {
         let term = Term {
             stdout: STDOUT.lock(),
             init_ios,
+            tmode: (
+                Handle::Stdout.terminal_mode(),
+                Handle::Stdin.terminal_mode(),
+            ),
             tx,
             rxvt: is_rxvt(Desc::current()),
         };
@@ -81,6 +86,14 @@ impl<'a> Term<'a> {
 }
 
 impl<'a> Terminal for Term<'a> {
+    fn is_tty_input(&self) -> bool {
+        self.tmode.1 != TerminalMode::Redir
+    }
+
+    fn is_tty_output(&self) -> bool {
+        self.tmode.0 != TerminalMode::Redir
+    }
+
     fn get_size(&self) -> Result<WinSize> {
         match get_size(Handle::Stdout) {
             Some(ws) => Ok(ws),

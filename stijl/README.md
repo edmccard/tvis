@@ -13,7 +13,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-stijl = "0.4.3"
+stijl = "0.5.0"
 ```
 
 and this to your crate root:

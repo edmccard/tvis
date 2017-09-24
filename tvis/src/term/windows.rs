@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use winapi;
 use kernel32;
-use tvis_util::Handle;
+use tvis_util::{ConsoleMode, Handle};
 use tvis_util::size::get_size;
 use input::Event;
 use term::{Terminal, TERM, WinSize};
@@ -17,13 +17,13 @@ pub struct Term {
     init_out_hndl: winapi::HANDLE,
     init_in_mode: Option<winapi::DWORD>,
     tx: Option<Sender<Box<Event>>>,
+    cmode: ConsoleMode,
 }
 
 impl Term {
     pub(in term) fn connect(
         tx: Option<Sender<Box<Event>>>,
     ) -> Result<Box<Terminal>> {
-        // TODO: make sure console is not redirected, etc.
         if TERM.compare_and_swap(false, true, Ordering::SeqCst) {
             panic!("TODO: better singleton panic message");
         }
@@ -33,7 +33,11 @@ impl Term {
             init_out_hndl: Handle::Stdout.win_handle(),
             init_in_mode: None,
             tx,
+            cmode: Handle::Stdout.console_mode(),
         };
+        if term.cmode == ConsoleMode::None {
+            // TODO error?
+        }
         term.set_mode()?;
         term.set_buffer()?;
         Ok(Box::new(term))
@@ -46,9 +50,13 @@ impl Term {
         } {
             return Error::ffi_err("GetConsoleMode failed");
         }
-        let in_mode = init_in_mode | winapi::ENABLE_MOUSE_INPUT |
+        let mut in_mode = init_in_mode | winapi::ENABLE_MOUSE_INPUT |
             winapi::ENABLE_WINDOW_INPUT;
-        let in_mode = in_mode & !winapi::ENABLE_PROCESSED_INPUT;
+        in_mode &= !winapi::ENABLE_PROCESSED_INPUT;
+        if self.cmode == ConsoleMode::Win10 {
+            in_mode &= !winapi::ENABLE_QUICK_EDIT_MODE;
+            in_mode |= winapi::ENABLE_EXTENDED_FLAGS;
+        }
         if 0 == unsafe { kernel32::SetConsoleMode(self.in_hndl, in_mode) } {
             return Error::ffi_err("SetConsoleMode failed");
         }

@@ -226,11 +226,11 @@ fn get_default_size(mode: TerminalMode, desc: &Desc) -> WinSize {
         _ => {
             let cols = match desc[cap::cols] {
                 0 | 0xffff => 80,
-                v => i32::from(v),
+                v => u32::from(v),
             };
             let rows = match desc[cap::lines] {
                 0 | 0xffff => 24,
-                v => i32::from(v),
+                v => u32::from(v),
             };
             WinSize { cols, rows }
         }

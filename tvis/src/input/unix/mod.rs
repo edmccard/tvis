@@ -293,8 +293,6 @@ impl Reader {
         use self::ParseState::*;
         use self::escmouse::Type::*;
 
-        println!("DATA {:?}\r", data);
-
         let mut pos = 0usize;
         while pos < data.len() {
             // Mouse coordinates in normal mode can have (single-byte)

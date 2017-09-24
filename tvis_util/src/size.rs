@@ -9,8 +9,8 @@ use Handle;
 /// The dimensions of a terminal window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WinSize {
-    pub cols: i32,
-    pub rows: i32,
+    pub cols: u32,
+    pub rows: u32,
 }
 
 impl Default for WinSize {
@@ -34,8 +34,8 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
         return None;
     }
     Some(WinSize {
-        cols: i32::from(csbi.srWindow.Right - csbi.srWindow.Left + 1),
-        rows: i32::from(csbi.srWindow.Bottom - csbi.srWindow.Top + 1),
+        cols: (csbi.srWindow.Right - csbi.srWindow.Left + 1) as u32,
+        rows: (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u32,
     })
 }
 
@@ -58,8 +58,8 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
         return None;
     }
     Some(WinSize {
-        cols: i32::from(win.ws_col),
-        rows: i32::from(win.ws_row),
+        cols: u32::from(win.ws_col),
+        rows: u32::from(win.ws_row),
     })
 }
 
@@ -96,7 +96,7 @@ pub fn get_default_console_size() -> WinSize {
         return Default::default();
     }
     WinSize {
-        cols: (data & 0xffff) as i32,
-        rows: (data >> 16) as i32,
+        cols: (data & 0xffff) as u32,
+        rows: (data >> 16) as u32,
     }
 }

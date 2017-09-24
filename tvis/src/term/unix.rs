@@ -5,85 +5,111 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use libc;
 use tinf::Desc;
+use tvis_util::Handle;
+use tvis_util::size::get_size;
 use input::Event;
-use term::{Screen, SCREEN};
+use term::{Terminal, TERM, WinSize};
 use {is_rxvt, Error, Result};
 
+lazy_static! {
+    static ref STDOUT: io::Stdout = io::stdout();
+}
 
-pub struct Term {
-    init_ios: Option<libc::termios>,
+pub(in term) struct Term<'a> {
+    stdout: io::StdoutLock<'a>,
+    init_ios: libc::termios,
+    tx: Option<Sender<Box<Event>>>,
     rxvt: bool,
 }
 
-impl Term {
-    pub fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
-        // TODO: make sure console is not redirected, etc.
-        if SCREEN.compare_and_swap(false, true, Ordering::SeqCst) {
+impl<'a> Term<'a> {
+    pub(in term) fn connect(
+        tx: Option<Sender<Box<Event>>>,
+    ) -> Result<Box<Terminal>> {
+        if TERM.compare_and_swap(false, true, Ordering::SeqCst) {
             panic!("TODO: better singleton panic message");
         }
-        let mut screen = Term {
-            init_ios: None,
+        // TODO: make sure console is not redirected, etc.
+        let init_ios = Term::set_ios()?;
+        Term::init(STDOUT.lock())?;
+        let term = Term {
+            stdout: STDOUT.lock(),
+            init_ios,
+            tx,
             rxvt: is_rxvt(Desc::current()),
         };
-        screen.set_ios()?;
-        screen.init_term()?;
-        ::input::start_threads(tx)?;
-        Ok(Box::new(screen))
+        Ok(Box::new(term))
     }
 
-    fn set_ios(&mut self) -> Result<()> {
+    fn set_ios() -> Result<libc::termios> {
         unsafe {
             let mut init_ios = ::std::mem::zeroed();
             if 0 != libc::tcgetattr(0, &mut init_ios) {
                 return Error::ffi_err("tcgetattr failed");
             }
-            self.init_ios = Some(init_ios);
             let mut ios = init_ios;
             libc::cfmakeraw(&mut ios);
             if 0 != libc::tcsetattr(0, 0, &ios) {
                 return Error::ffi_err("tcsetattr failed");
             }
+            Ok(init_ios)
         }
+    }
+
+    fn init(_: io::StdoutLock) -> Result<()> {
         Ok(())
     }
 
-    fn init_term(&self) -> Result<()> {
-        let stdout = io::stdout();
-        let mut stdout = stdout.lock();
-        let _ = stdout.write_all(b"\x1b[?1000h");
-        let _ = stdout.write_all(b"\x1b[?1003h");
+    fn init_mouse(&mut self) -> Result<()> {
+        self.stdout.write_all(b"\x1b[?1000h")?;
+        self.stdout.write_all(b"\x1b[?1003h")?;
         if self.rxvt {
-            let _ = stdout.write_all(b"\x1b[?1015h");
+            self.stdout.write_all(b"\x1b[?1015h")?;
         }
-        let _ = stdout.write_all(b"\x1b[?1006h");
-        let _ = stdout.flush();
+        self.stdout.write_all(b"\x1b[?1006h")?;
         Ok(())
     }
-}
 
-impl Screen for Term {
-    #[cfg(debug_assertions)]
-    fn log(&self, text: &str) {
-        print!("{}", text);
-        println!("\r");
+    fn drop_mouse(&mut self) {
+        let _ = self.stdout.write_all(b"\x1b[?1000l");
+        let _ = self.stdout.write_all(b"\x1b[?1003l");
+        if self.rxvt {
+            let _ = self.stdout.write_all(b"\x1b[?1015l");
+        }
+        let _ = self.stdout.write_all(b"\x1b[?1006l");
     }
 }
 
-impl Drop for Term {
+impl<'a> Terminal for Term<'a> {
+    fn get_size(&self) -> Result<WinSize> {
+        match get_size(Handle::Stdout) {
+            Some(ws) => Ok(ws),
+            None => Error::ffi_err("ioctl failed"),
+        }
+    }
+
+    fn start_input(&mut self) -> Result<()> {
+        self.init_mouse()?;
+        self.stdout.flush()?;
+        ::input::start_threads(
+            self.tx.take().expect("start_input may only be called once"),
+        )
+    }
+
+    #[cfg(debug_assertions)]
+    fn log(&mut self, text: &str) {
+        let mut stderr = io::stderr();
+        let _ = write!(stderr, "{}", text);
+        let _ = writeln!(stderr, "\r");
+    }
+}
+
+impl<'a> Drop for Term<'a> {
     fn drop(&mut self) {
-        if let Some(init_ios) = self.init_ios {
-            let stdout = io::stdout();
-            let mut stdout = stdout.lock();
-            let _ = stdout.write_all(b"\x1b[?1000l");
-            let _ = stdout.write_all(b"\x1b[?1003l");
-            if self.rxvt {
-                let _ = stdout.write_all(b"\x1b[?1015l");
-            }
-            let _ = stdout.write_all(b"\x1b[?1006l");
-            let _ = stdout.flush();
-            unsafe {
-                libc::tcsetattr(0, 0, &init_ios);
-            }
+        self.drop_mouse();
+        let _ = self.stdout.flush();
+        unsafe {
+            libc::tcsetattr(0, 0, &self.init_ios);
         }
     }
 }

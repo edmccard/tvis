@@ -6,8 +6,9 @@ use std::sync::mpsc::Sender;
 use winapi;
 use kernel32;
 use tvis_util::Handle;
+use tvis_util::size::get_size;
 use input::Event;
-use term::{Screen, SCREEN};
+use term::{Terminal, TERM, WinSize};
 use {Error, Result};
 
 pub struct Term {
@@ -15,24 +16,27 @@ pub struct Term {
     out_hndl: winapi::HANDLE,
     init_out_hndl: winapi::HANDLE,
     init_in_mode: Option<winapi::DWORD>,
+    tx: Option<Sender<Box<Event>>>,
 }
 
 impl Term {
-    pub fn init(tx: Sender<Box<Event>>) -> Result<Box<Screen>> {
+    pub(in term) fn connect(
+        tx: Option<Sender<Box<Event>>>,
+    ) -> Result<Box<Terminal>> {
         // TODO: make sure console is not redirected, etc.
-        if SCREEN.compare_and_swap(false, true, Ordering::SeqCst) {
+        if TERM.compare_and_swap(false, true, Ordering::SeqCst) {
             panic!("TODO: better singleton panic message");
         }
-        let mut screen = Term {
+        let mut term = Term {
             in_hndl: Handle::Stdin.win_handle(),
             out_hndl: ptr::null_mut(),
             init_out_hndl: Handle::Stdout.win_handle(),
             init_in_mode: None,
+            tx,
         };
-        screen.set_mode()?;
-        screen.set_buffer()?;
-        ::input::start_threads(tx)?;
-        Ok(Box::new(screen))
+        term.set_mode()?;
+        term.set_buffer()?;
+        Ok(Box::new(term))
     }
 
     fn set_mode(&mut self) -> Result<()> {
@@ -77,9 +81,22 @@ impl Term {
     }
 }
 
-impl Screen for Term {
+impl Terminal for Term {
+    fn get_size(&self) -> Result<WinSize> {
+        match get_size(Handle::Stdout) {
+            Some(ws) => Ok(ws),
+            None => Error::ffi_err("GetConsoleScreenBufferInfo failed"),
+        }
+    }
+
+    fn start_input(&mut self) -> Result<()> {
+        ::input::start_threads(
+            self.tx.take().expect("start_input may only be called once"),
+        )
+    }
+
     #[cfg(debug_assertions)]
-    fn log(&self, text: &str) {
+    fn log(&mut self, text: &str) {
         let crlf = [13u8, 10u8];
         let mut count: winapi::DWORD = 0;
         unsafe {

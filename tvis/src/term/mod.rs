@@ -1,4 +1,9 @@
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
+use std::sync::mpsc::Sender;
+use input::Event;
+use Result;
+
+pub use tvis_util::size::WinSize;
 
 #[cfg(windows)]
 #[path = "windows.rs"]
@@ -8,14 +13,23 @@ mod platform;
 mod platform;
 
 #[cfg(windows)]
-pub use self::platform::Term;
-
+use self::platform::Term;
 #[cfg(not(windows))]
-pub use self::platform::Term;
+use self::platform::Term;
 
-static SCREEN: AtomicBool = ATOMIC_BOOL_INIT;
+static TERM: AtomicBool = ATOMIC_BOOL_INIT;
 
-pub trait Screen {
+pub trait Terminal {
+    fn get_size(&self) -> Result<WinSize>;
+    fn start_input(&mut self) -> Result<()>;
     #[cfg(debug_assertions)]
-    fn log(&self, text: &str);
+    fn log(&mut self, text: &str);
+}
+
+pub fn connect() -> Result<Box<Terminal>> {
+    Term::connect(None)
+}
+
+pub fn connect_with_input(tx: Sender<Box<Event>>) -> Result<Box<Terminal>> {
+    Term::connect(Some(tx))
 }

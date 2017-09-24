@@ -422,6 +422,7 @@ bitflags! {
 
 pub struct MouseReader {
     tx: Sender<Box<Event>>,
+    coords: (u32, u32),
     btns: Btn,
 }
 
@@ -429,6 +430,7 @@ impl MouseReader {
     fn new(tx: Sender<Box<Event>>) -> MouseReader {
         MouseReader {
             tx,
+            coords: (0, 0),
             btns: Btn::empty(),
         }
     }
@@ -480,8 +482,10 @@ impl MouseReader {
                 }
             }
             1 => {
-                let mevt = InputEvent::MouseMove(mods, coords);
-                self.send(mevt)?;
+                if coords != self.coords {
+                    let mevt = InputEvent::MouseMove(mods, coords);
+                    self.send(mevt)?;
+                }
             }
             4 => {
                 let mevt = if (evt.dwButtonState >> 16) < 0x8000 {
@@ -493,6 +497,7 @@ impl MouseReader {
             }
             _ => (),
         }
+        self.coords = coords;
         Ok(())
     }
 }

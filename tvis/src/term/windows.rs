@@ -14,13 +14,14 @@ use {Error, Result};
 // winapi omits this.
 const ENABLE_VIRTUAL_TERMINAL_INPUT: winapi::DWORD = 0x0200;
 
-pub struct Term {
+pub(in term) struct Term {
     in_hndl: winapi::HANDLE,
     out_hndl: winapi::HANDLE,
     init_out_hndl: winapi::HANDLE,
     init_in_mode: Option<winapi::DWORD>,
     tx: Option<Sender<Box<Event>>>,
     cmode: (ConsoleMode, ConsoleMode),
+    init_cp: (winapi::UINT, winapi::UINT),
 }
 
 impl Term {
@@ -40,9 +41,11 @@ impl Term {
                 Handle::Stdout.console_mode(),
                 Handle::Stdin.console_mode(),
             ),
+            init_cp: (0, 0),
         };
         term.set_mode()?;
         term.set_buffer()?;
+        term.set_cp()?;
         Ok(Box::new(term))
     }
 
@@ -53,12 +56,12 @@ impl Term {
         } {
             return Error::ffi_err("GetConsoleMode failed");
         }
-        let mut in_mode = init_in_mode | winapi::ENABLE_MOUSE_INPUT
-            | winapi::ENABLE_WINDOW_INPUT & !winapi::ENABLE_PROCESSED_INPUT;
+        let mut in_mode = init_in_mode | winapi::ENABLE_MOUSE_INPUT |
+            winapi::ENABLE_WINDOW_INPUT & !winapi::ENABLE_PROCESSED_INPUT;
         if self.cmode.1 == ConsoleMode::Win10 {
-            in_mode = in_mode & !winapi::ENABLE_QUICK_EDIT_MODE
-                & !ENABLE_VIRTUAL_TERMINAL_INPUT
-                | winapi::ENABLE_EXTENDED_FLAGS;
+            in_mode = in_mode & !winapi::ENABLE_QUICK_EDIT_MODE &
+                !ENABLE_VIRTUAL_TERMINAL_INPUT |
+                winapi::ENABLE_EXTENDED_FLAGS;
         }
         if 0 == unsafe { kernel32::SetConsoleMode(self.in_hndl, in_mode) } {
             return Error::ffi_err("SetConsoleMode failed");
@@ -88,6 +91,22 @@ impl Term {
         }
 
         self.out_hndl = hndl;
+        Ok(())
+    }
+
+    fn set_cp(&mut self) -> Result<()> {
+        unsafe {
+            self.init_cp = (
+                kernel32::GetConsoleOutputCP(),
+                kernel32::GetConsoleCP(),
+            );
+        }
+        if 0 == unsafe { kernel32::SetConsoleOutputCP(65001) } {
+            return Error::ffi_err("SetConsoleOutputCP failed");
+        }
+        if 0 == unsafe { kernel32::SetConsoleCP(65001) } {
+            return Error::ffi_err("SetConsoleCP failed");
+        }
         Ok(())
     }
 }
@@ -144,6 +163,8 @@ impl Drop for Term {
                 kernel32::SetConsoleMode(self.in_hndl, mode);
             }
             kernel32::SetConsoleActiveScreenBuffer(self.init_out_hndl);
+            kernel32::SetConsoleOutputCP(self.init_cp.0);
+            kernel32::SetConsoleCP(self.init_cp.1);
             // TODO: remember how to handle init_out_mode
         }
     }

@@ -364,12 +364,12 @@ mod test {
 
     #[test]
     fn mods() {
-        use input::{ALT, CTRL, SHIFT};
+        use input::Mods;
         let f5 = (b"[15~", (Key::F5, Mods::empty()));
-        let sf5 = (b"[15;2~", (Key::F5, SHIFT));
-        let acf5 = (b"[15;7~", (Key::F5, CTRL | ALT));
+        let sf5 = (b"[15;2~", (Key::F5, Mods::SHIFT));
+        let acf5 = (b"[15;7~", (Key::F5, Mods::CTRL | Mods::ALT));
         let mf5 = (b"[15;9~", (Key::F5, Mods::empty()));
-        let macf5 = (b"[15;15~", (Key::F5, CTRL | ALT));
+        let macf5 = (b"[15;15~", (Key::F5, Mods::CTRL | Mods::ALT));
         let mut with_mods = empty_keys(true);
         Parser::add_key_bytes(&mut with_mods.nodes, f5.0, f5.1);
         assert_eq!(search(&mut with_mods, f5.0), Some(f5.1));

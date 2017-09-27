@@ -610,8 +610,8 @@ mod test {
 
     #[test]
     fn alt_esc() {
-        use input::ALT;
-        let expected = InputEvent::Key(Key::Esc, ALT);
+        use input::Mods;
+        let expected = InputEvent::Key(Key::Esc, Mods::ALT);
 
         let (tx, rx) = channel();
         let desc = desc();
@@ -628,8 +628,8 @@ mod test {
 
     #[test]
     fn esc_then_key() {
-        use input::ALT;
-        let expected = InputEvent::Key(Key::ascii(b'1'), ALT);
+        use input::Mods;
+        let expected = InputEvent::Key(Key::ascii(b'1'), Mods::ALT);
 
         let (tx, rx) = channel();
         let desc = desc();
@@ -653,8 +653,8 @@ mod test {
 
     #[test]
     fn rxvt_esc_then_seq() {
-        use input::ALT;
-        let expected = InputEvent::Key(Key::F5, ALT);
+        use input::Mods;
+        let expected = InputEvent::Key(Key::F5, Mods::ALT);
 
         let (tx, rx) = channel();
         let desc = desc_rxvt();

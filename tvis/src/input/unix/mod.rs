@@ -238,7 +238,7 @@ impl Reader {
     fn reset(&mut self) -> ParseResult {
         use self::ParseState::*;
         use self::escmouse::Type::*;
-        use input::ALT;
+        use input::Mods;
 
         match self.state {
             Init => (),
@@ -246,7 +246,7 @@ impl Reader {
                 // These input bytes were discarded when parsing
                 // switched from "key mode" to "mouse mode", so we
                 // manually recreate them.
-                self.send_key(Key::ascii(b'['), ALT)?;
+                self.send_key(Key::ascii(b'['), Mods::ALT)?;
                 match ty {
                     Normal => {
                         self.send_key(Key::ascii(b'M'), Mods::empty())?;
@@ -279,9 +279,9 @@ impl Reader {
     }
 
     fn reset_with_alt(&self) -> ParseResult {
-        use input::ALT;
+        use input::Mods;
         let (key, mods) = self.xlate_cp(self.hold_keys[0]);
-        self.send_key(key, mods | ALT)?;
+        self.send_key(key, mods | Mods::ALT)?;
         for cp in &self.hold_keys[1..] {
             let (key, mods) = self.xlate_cp(*cp);
             self.send_key(key, mods)?;
@@ -378,7 +378,7 @@ impl Reader {
 
     fn search_key_seq(&mut self, cp: Utf8Val) -> ParseResult {
         use self::esckey::ParseResult::*;
-        use input::ALT;
+        use input::Mods;
 
         match self.kparse.search(cp.0[0]) {
             No => {
@@ -409,7 +409,7 @@ impl Reader {
             Maybe => Ok(ParseOk::Continue),
             Found((k, m)) => {
                 let m = match self.state {
-                    ParseState::Esc2 => m | ALT,
+                    ParseState::Esc2 => m | Mods::ALT,
                     _ => m,
                 };
                 self.hold_keys.clear();
@@ -428,16 +428,16 @@ impl Reader {
     // Translate ascii special chars (C-<char>, Esc, Tab, Enter, BS)
     // and pass through the rest as Key::Char
     fn xlate_cp(&self, cp: Utf8Val) -> (Key, Mods) {
-        use input::CTRL;
+        use input::Mods;
 
         match cp.0[0] {
-            0 => (Key::ascii(32), CTRL),
+            0 => (Key::ascii(32), Mods::CTRL),
             9 => (Key::Tab, Mods::empty()),
             13 => (Key::Enter, Mods::empty()),
             27 => (Key::Esc, Mods::empty()),
             b if b == self.bs => (Key::BS, Mods::empty()),
-            b if b == self.cbs => (Key::BS, CTRL),
-            b if b < b' ' => (Key::ascii(b + 64), CTRL),
+            b if b == self.cbs => (Key::BS, Mods::CTRL),
+            b if b < b' ' => (Key::ascii(b + 64), Mods::CTRL),
             _ => (Key::Char(cp.0, cp.1), Mods::empty()),
         }
     }

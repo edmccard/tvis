@@ -82,7 +82,7 @@ bitflags! {
         const SHIFT = 0b001;
         const ALT = 0b010;
         const CTRL = 0b100;
-        const CTRL_ALT = CTRL.bits | ALT.bits;
+        const CTRL_ALT = Self::CTRL.bits | Self::ALT.bits;
     }
 }
 

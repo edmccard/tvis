@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use winapi;
 use kernel32;
 use tvis_util::{ConsoleMode, Handle};
-use tvis_util::size;
+use tvis_util::{color, size};
 use {CLIStream, Color, DoStyle, LockableStream, Result, Stream, WinSize};
 
 
@@ -12,7 +12,7 @@ use {CLIStream, Color, DoStyle, LockableStream, Result, Stream, WinSize};
 pub struct ConStream<T> {
     w: T,
     hndl: winapi::HANDLE,
-    orig_pair: CPair,
+    orig_pair: color::CPair,
     defsz: WinSize,
     do_style: bool,
 }
@@ -37,7 +37,7 @@ impl<T: Write> ConStream<T> {
         let is_atty = handle.console_mode() != ConsoleMode::None;
         let do_style = is_atty && (do_style != DoStyle::Never);
         let orig_pair = match do_style {
-            true => *ORIG_PAIR,
+            true => color::default_colors(),
             false => (7, 0),
         };
         ConStream {
@@ -53,7 +53,7 @@ impl<T: Write> ConStream<T> {
         if self.do_style {
             self.flush()?;
             let orig = self.orig_pair;
-            set_colors(self.hndl, orig);
+            color::set_colors(self.hndl, orig);
         }
         Ok(())
     }
@@ -61,9 +61,9 @@ impl<T: Write> ConStream<T> {
     fn fg(&mut self, fg: Color) -> Result<()> {
         if self.do_style {
             self.flush()?;
-            let cur = get_colors(self.hndl);
+            let cur = color::get_colors(self.hndl);
             let em_mask = cur.0 & (winapi::FOREGROUND_INTENSITY as u16);
-            set_colors(self.hndl, (fg.1 | em_mask, cur.1));
+            color::set_colors(self.hndl, (fg.1 | em_mask, cur.1));
         }
         Ok(())
     }
@@ -71,9 +71,9 @@ impl<T: Write> ConStream<T> {
     fn em(&mut self) -> Result<()> {
         if self.do_style {
             self.flush()?;
-            let cur = get_colors(self.hndl);
+            let cur = color::get_colors(self.hndl);
             let fg = cur.0 | (winapi::FOREGROUND_INTENSITY as u16);
-            set_colors(self.hndl, (fg, cur.1));
+            color::set_colors(self.hndl, (fg, cur.1));
         }
         Ok(())
     }
@@ -262,37 +262,4 @@ impl LockableStream for ConStream<io::Stderr> {
         };
         Box::new(locked)
     }
-}
-
-
-type CPair = (winapi::USHORT, winapi::USHORT);
-
-// Assumes `hndl` is a console screen buffer.
-fn get_colors(hndl: winapi::HANDLE) -> CPair {
-    use std::mem;
-
-    let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
-        unsafe { mem::uninitialized() };
-    unsafe {
-        kernel32::GetConsoleScreenBufferInfo(hndl, &mut csbi);
-    }
-    (csbi.wAttributes & 0x7, (csbi.wAttributes & 0x70) >> 4)
-}
-
-// Assumes `hndl` is a console screen buffer.
-fn set_colors(hndl: winapi::HANDLE, clrs: CPair) {
-    unsafe {
-        kernel32::SetConsoleTextAttribute(hndl, clrs.0 | ((clrs.1) << 4));
-    }
-}
-
-lazy_static! {
-    static ref ORIG_PAIR: CPair = {
-        let hndl =
-            unsafe { kernel32::GetStdHandle(Handle::Stdout as winapi::DWORD) };
-        match Handle::Stdout.console_mode() {
-            ConsoleMode::None => (7, 0),
-            _ => get_colors(hndl),
-        }
-    };
 }

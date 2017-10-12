@@ -19,6 +19,7 @@ fn main() {
         thread::sleep(five_millis);
         write!(stream, "TWO ");
         thread::sleep(five_millis);
+        stream.em();
         writeln!(stream, "THREE");
         stream.reset();
     });
@@ -31,6 +32,7 @@ fn main() {
         thread::sleep(five_millis);
         write!(stream, "2 ");
         thread::sleep(five_millis);
+        stream.em();
         writeln!(stream, "3");
         stream.reset();
     });
@@ -43,6 +45,7 @@ fn main() {
         thread::sleep(five_millis);
         write!(stream, "II ");
         thread::sleep(five_millis);
+        stream.em();
         writeln!(stream, "III");
         stream.reset();
     });

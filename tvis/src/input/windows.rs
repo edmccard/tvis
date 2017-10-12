@@ -367,7 +367,7 @@ impl KeyReader {
     }
 
     fn key(&self, evt: &KEY_EVENT_RECORD) -> Result<()> {
-        use input::CTRL;
+        use input::Mods;
 
         let uc = evt.UnicodeChar;
         let mods = Mods::win32(evt.dwControlKeyState);
@@ -376,11 +376,11 @@ impl KeyReader {
         } else if uc < 0x80 {
             match uc {
                 3 => return self.send(InputEvent::Interrupt),
-                8 => (Key::BS, mods - CTRL),
-                9 => (Key::Tab, mods - CTRL),
-                13 => (Key::Enter, mods - CTRL),
-                27 => (Key::Esc, mods - CTRL),
-                b if b < 32 => (Key::ascii(b as u8 + 64), mods | CTRL),
+                8 => (Key::BS, mods - Mods::CTRL),
+                9 => (Key::Tab, mods - Mods::CTRL),
+                13 => (Key::Enter, mods - Mods::CTRL),
+                27 => (Key::Esc, mods - Mods::CTRL),
+                b if b < 32 => (Key::ascii(b as u8 + 64), mods | Mods::CTRL),
                 _ => (Key::Char([uc as u8, 0, 0, 0], 1), mods),
             }
         } else if uc < 0x800 {
@@ -422,7 +422,7 @@ bitflags! {
 
 pub struct MouseReader {
     tx: Sender<Box<Event>>,
-    coords: (u32, u32),
+    coords: (i32, i32),
     btns: Btn,
 }
 
@@ -430,7 +430,7 @@ impl MouseReader {
     fn new(tx: Sender<Box<Event>>) -> MouseReader {
         MouseReader {
             tx,
-            coords: (0, 0),
+            coords: (-1, -1),
             btns: Btn::empty(),
         }
     }
@@ -446,8 +446,8 @@ impl MouseReader {
         use input::WheelMotion::*;
 
         let coords = (
-            (evt.dwMousePosition.X as u32) + 1,
-            (evt.dwMousePosition.Y as u32) + 1,
+            (evt.dwMousePosition.X as u16),
+            (evt.dwMousePosition.Y as u16),
         );
         let mods = Mods::win32(evt.dwControlKeyState);
         match evt.dwEventFlags {
@@ -456,48 +456,46 @@ impl MouseReader {
                 let presses = new_btns - self.btns;
                 let releases = self.btns - new_btns;
                 self.btns = new_btns;
-                if presses.contains(LEFT) {
+                if presses.contains(Btn::LEFT) {
                     let mevt = InputEvent::Mouse(Press, Left, mods, coords);
                     self.send(mevt)?;
                 }
-                if presses.contains(MIDDLE) {
+                if presses.contains(Btn::MIDDLE) {
                     let mevt = InputEvent::Mouse(Press, Middle, mods, coords);
                     self.send(mevt)?;
                 }
-                if presses.contains(RIGHT) {
+                if presses.contains(Btn::RIGHT) {
                     let mevt = InputEvent::Mouse(Press, Right, mods, coords);
                     self.send(mevt)?;
                 }
-                if releases.contains(LEFT) {
+                if releases.contains(Btn::LEFT) {
                     let mevt = InputEvent::Mouse(Release, Left, mods, coords);
                     self.send(mevt)?;
                 }
-                if releases.contains(MIDDLE) {
+                if releases.contains(Btn::MIDDLE) {
                     let mevt = InputEvent::Mouse(Release, Middle, mods, coords);
                     self.send(mevt)?;
                 }
-                if releases.contains(RIGHT) {
+                if releases.contains(Btn::RIGHT) {
                     let mevt = InputEvent::Mouse(Release, Right, mods, coords);
                     self.send(mevt)?;
                 }
             }
-            1 => {
-                if coords != self.coords {
-                    let mevt = InputEvent::MouseMove(mods, coords);
-                    self.send(mevt)?;
-                }
-            }
+            1 => if (i32::from(coords.0), i32::from(coords.1)) != self.coords {
+                let mevt = InputEvent::MouseMove(mods, coords);
+                self.send(mevt)?;
+            },
             4 => {
                 let mevt = if (evt.dwButtonState >> 16) < 0x8000 {
-                    InputEvent::MouseWheel(Up, mods)
+                    InputEvent::MouseWheel(Up, mods, coords)
                 } else {
-                    InputEvent::MouseWheel(Down, mods)
+                    InputEvent::MouseWheel(Down, mods, coords)
                 };
                 self.send(mevt)?;
             }
             _ => (),
         }
-        self.coords = coords;
+        self.coords = (i32::from(coords.0), i32::from(coords.1));
         Ok(())
     }
 }

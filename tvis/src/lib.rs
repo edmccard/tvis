@@ -21,7 +21,7 @@ pub mod term;
 pub mod input;
 
 /////////////////////////////////////////////////////////////////
-pub type Coords = (u32, u32);
+pub type Coords = (u16, u16);
 
 #[derive(Debug)]
 pub struct Error {
@@ -41,6 +41,7 @@ enum ErrorImpl {
     Io(io::Error),
     FFI(String, io::Error),
     TX,
+    #[cfg(not(windows))] Cap(::tinf::CapError),
 }
 
 impl From<io::Error> for Error {
@@ -59,12 +60,23 @@ impl From<SendError<Box<input::Event>>> for Error {
     }
 }
 
+#[cfg(not(windows))]
+impl From<::tinf::CapError> for Error {
+    fn from(err: ::tinf::CapError) -> Error {
+        Error {
+            inner: ErrorImpl::Cap(err),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
             ErrorImpl::Io(ref err) => err.fmt(f),
             ErrorImpl::FFI(ref msg, _) => write!(f, "{}", msg),
             ErrorImpl::TX => write!(f, "channel send error"),
+            #[cfg(not(windows))]
+            ErrorImpl::Cap(ref err) => err.fmt(f),
         }
     }
 }
@@ -75,6 +87,8 @@ impl error::Error for Error {
             ErrorImpl::Io(ref err) => err.description(),
             ErrorImpl::FFI(..) => "terminal FFI error",
             ErrorImpl::TX => "channel send error",
+            #[cfg(not(windows))]
+            ErrorImpl::Cap(ref err) => err.description(),
         }
     }
 

@@ -30,10 +30,10 @@ pub(super) const SGR_MAGIC: u8 = 20;
 pub(super) struct Parser {
     ty: Type,
     state: State,
-    param: u32,
+    param: u16,
     plen: usize,
     evt: InputEvent,
-    x: u32,
+    x: u16,
 }
 
 impl Parser {
@@ -97,14 +97,14 @@ impl Parser {
                 if byte < 33 {
                     return No;
                 }
-                self.x = u32::from(byte - 33);
+                self.x = u16::from(byte - 33);
                 self.state = State::Y;
             }
             State::Y => {
                 if byte < 33 {
                     return No;
                 }
-                self.set_coords(u32::from(byte - 33));
+                self.set_coords(u16::from(byte - 33));
                 return self.mouse_event();
             }
         }
@@ -194,10 +194,10 @@ impl Parser {
         }
     }
 
-    fn update_param(&mut self, byte: u8, max: u32) -> bool {
+    fn update_param(&mut self, byte: u8, max: u16) -> bool {
         self.plen += 1;
         self.param *= 10;
-        self.param += u32::from(byte - b'0');
+        self.param += u16::from(byte - b'0');
         self.param <= max
     }
 
@@ -210,9 +210,9 @@ impl Parser {
         let byte = byte & 0b1110_0011;
         if byte > 95 {
             if byte == 96 {
-                self.evt = MouseWheel(WheelMotion::Up, mods);
+                self.evt = MouseWheel(WheelMotion::Up, mods, (0, 0));
             } else if byte == 97 {
-                self.evt = MouseWheel(WheelMotion::Down, mods);
+                self.evt = MouseWheel(WheelMotion::Down, mods, (0, 0));
             } else if self.ty == Type::Urxvt && (byte == 128 || byte == 129) {
                 // Urxvt reports mouse movements after a wheel event
                 // as though the wheel motion was still "pressed",
@@ -235,12 +235,14 @@ impl Parser {
         true
     }
 
-    fn set_coords(&mut self, y: u32) {
+    fn set_coords(&mut self, y: u16) {
         use self::InputEvent::*;
 
+        let coords = (self.x - 1, y - 1);
         let evt = match self.evt {
-            Mouse(m, b, ms, _) => Mouse(m, b, ms, (self.x, y)),
-            MouseMove(ms, _) => MouseMove(ms, (self.x, y)),
+            Mouse(m, b, ms, _) => Mouse(m, b, ms, coords),
+            MouseMove(ms, _) => MouseMove(ms, coords),
+            MouseWheel(wm, ms, _) => MouseWheel(wm, ms, coords),
             _ => return,
         };
         self.evt = evt;

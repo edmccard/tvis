@@ -102,6 +102,13 @@ pub enum ConsoleMode {
     Win10,
 }
 
+#[cfg(windows)]
+impl Default for ConsoleMode {
+    fn default() -> ConsoleMode {
+        ConsoleMode::None
+    }
+}
+
 // winapi-rs omits these
 #[cfg(windows)]
 const ENABLE_VIRTUAL_TERMINAL_PROCESSING: winapi::DWORD = 0x0004;

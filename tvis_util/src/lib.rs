@@ -1,11 +1,17 @@
-#[cfg(not(windows))]
-extern crate libc;
 #[cfg(windows)]
 extern crate advapi32;
 #[cfg(windows)]
 extern crate kernel32;
 #[cfg(windows)]
+#[macro_use]
+extern crate lazy_static;
+#[cfg(not(windows))]
+extern crate libc;
+#[cfg(windows)]
 extern crate winapi;
+
+#[cfg(windows)]
+pub mod color;
 
 mod mode;
 pub mod size;

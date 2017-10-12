@@ -116,9 +116,6 @@
 
 #[cfg(windows)]
 extern crate kernel32;
-#[cfg(windows)]
-#[macro_use]
-extern crate lazy_static;
 #[macro_use]
 extern crate tinf;
 extern crate tvis_util;

@@ -150,7 +150,7 @@ pub enum InputEvent {
     Interrupt,
     Break,
     Mouse(ButtonMotion, MouseButton, Mods, Coords),
-    MouseWheel(WheelMotion, Mods),
+    MouseWheel(WheelMotion, Mods, Coords),
     MouseMove(Mods, Coords),
     Key(Key, Mods),
 }

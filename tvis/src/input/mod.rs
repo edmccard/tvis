@@ -20,8 +20,8 @@ pub trait Event: fmt::Debug + Send {
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum Key {
-    Char(char, [u8; 4], u8),
-    Err([u8; 4], u8),
+    Char(char, [u8; 4], usize),
+    Err([u8; 4], usize),
     Esc,
     F1,
     F2,

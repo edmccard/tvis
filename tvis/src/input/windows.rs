@@ -307,7 +307,7 @@ impl KeyReader {
                 let c = ::std::char::from_u32(c).unwrap();
                 let len = c.encode_utf8(&mut utf8).len();
                 let kevt = InputEvent::Key(
-                    Key::Char(c, utf8, len as u8),
+                    Key::Char(c, utf8, len),
                     Mods::win32(evt.dwControlKeyState),
                 );
                 self.send(kevt)?;

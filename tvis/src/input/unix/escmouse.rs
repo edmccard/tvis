@@ -24,8 +24,8 @@ enum State {
     Y,
 }
 
-pub(super) const MOUSE_MAGIC: u8 = 10;
-pub(super) const SGR_MAGIC: u8 = 20;
+pub(super) const MOUSE_MAGIC: usize = 10;
+pub(super) const SGR_MAGIC: usize = 20;
 
 pub(super) struct Parser {
     ty: Type,

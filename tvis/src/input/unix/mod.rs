@@ -442,7 +442,7 @@ impl Reader {
     }
 }
 
-type Utf8Val = ([u8; 4], u8, char);
+type Utf8Val = ([u8; 4], usize, char);
 
 enum Utf8Result {
     Ok(Utf8Val, usize),
@@ -491,14 +491,14 @@ impl Utf8Parser {
     }
 
     fn ok(&mut self, pos: usize, c: char) -> Utf8Result {
-        let ret = Utf8Result::Ok((self.bytes, self.bytes_read as u8, c), pos);
+        let ret = Utf8Result::Ok((self.bytes, self.bytes_read, c), pos);
         self.bytes_read = 0;
         ret
     }
 
     fn err(&mut self, pos: usize) -> Utf8Result {
         let ret =
-            Utf8Result::Err((self.bytes, self.bytes_read as u8, '\x00'), pos);
+            Utf8Result::Err((self.bytes, self.bytes_read, '\x00'), pos);
         self.bytes_read = 0;
         ret
     }

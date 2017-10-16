@@ -268,7 +268,7 @@ impl Reader {
                 self.reset_with_alt()?;
             },
             Esc2 => {
-                self.hold_keys.insert(0, ([27, 0, 0, 0], 1));
+                self.hold_keys.insert(0, ([27, 0, 0, 0], 1, '\x1b'));
                 self.reset_with_alt()?;
             }
         };
@@ -299,7 +299,7 @@ impl Reader {
             // values between 128 and 255, so pass them along without
             // parsing as UTF-8.
             if self.state == Mouse(Normal) {
-                let cp = ([data[pos], 0, 0, 0], 1);
+                let cp = ([data[pos], 0, 0, 0], 1, '\x00');
                 pos += 1;
                 self.parse_cp(cp)?;
                 continue;
@@ -312,7 +312,7 @@ impl Reader {
                     return self.send_key(Key::Err(cp.0, cp.1), Mods::empty());
                 }
                 Utf8Result::Ok(cp, len) => {
-                    pos += len as usize;
+                    pos += len;
                     self.parse_cp(cp)?;
                 }
             }
@@ -338,10 +338,9 @@ impl Reader {
             }
         }
 
-        // No key or mouse sequence uses multi-byte characters
-        // (corollary: self.hold_keys cannot be observed to contain a
-        // multi-byte character, since it is cleared by reset after
-        // one is pushed).
+        // No key or mouse sequence uses multi-byte characters (also,
+        // self.hold_keys cannot be observed to contain one, since it
+        // is cleared by reset after one is pushed).
         if cp.1 > 1 {
             self.hold_keys.push(cp);
             return self.reset();
@@ -385,8 +384,8 @@ impl Reader {
                 // Urxvt extended mouse mode starts with CSI but
                 // doesn't have a prefix byte, so if a CSI seq isn't a
                 // key we check here to see if it's a mouse event.
-                if self.rxvt && self.hold_keys.len() > 1 &&
-                    self.hold_keys[0].0[0] == b'['
+                if self.rxvt && self.hold_keys.len() > 1
+                    && self.hold_keys[0].0[0] == b'['
                 {
                     use self::escmouse::ParseResult as Mouse;
 
@@ -438,16 +437,16 @@ impl Reader {
             b if b == self.bs => (Key::BS, Mods::empty()),
             b if b == self.cbs => (Key::BS, Mods::CTRL),
             b if b < b' ' => (Key::ascii(b + 64), Mods::CTRL),
-            _ => (Key::Char(cp.0, cp.1), Mods::empty()),
+            _ => (Key::Char(cp.2, cp.0, cp.1), Mods::empty()),
         }
     }
 }
 
-type Utf8Val = ([u8; 4], u8);
+type Utf8Val = ([u8; 4], u8, char);
 
 enum Utf8Result {
-    Ok(Utf8Val, u8),
-    Err(Utf8Val, u8),
+    Ok(Utf8Val, usize),
+    Err(Utf8Val, usize),
     Wait,
 }
 
@@ -491,16 +490,15 @@ impl Utf8Parser {
         self.b2_max = b2_max;
     }
 
-    fn ok(&mut self, pos: usize) -> Utf8Result {
-        let ret =
-            Utf8Result::Ok((self.bytes, self.bytes_read as u8), pos as u8);
+    fn ok(&mut self, pos: usize, c: char) -> Utf8Result {
+        let ret = Utf8Result::Ok((self.bytes, self.bytes_read as u8, c), pos);
         self.bytes_read = 0;
         ret
     }
 
     fn err(&mut self, pos: usize) -> Utf8Result {
         let ret =
-            Utf8Result::Err((self.bytes, self.bytes_read as u8), pos as u8);
+            Utf8Result::Err((self.bytes, self.bytes_read as u8, '\x00'), pos);
         self.bytes_read = 0;
         ret
     }
@@ -510,6 +508,8 @@ impl Utf8Parser {
     }
 
     fn read(&mut self, data: &[u8]) -> Utf8Result {
+        use std::char;
+
         assert!(!data.is_empty());
         let mut pos = 0usize;
         if self.bytes_read < 1 {
@@ -521,7 +521,9 @@ impl Utf8Parser {
                 return self.err(pos);
             }
             if self.clen == 1 {
-                return self.ok(pos);
+                let u = self.bytes[0] as u32;
+                let c = unsafe { char::from_u32_unchecked(u) };
+                return self.ok(pos, c);
             }
         }
         if self.bytes_read < 2 {
@@ -535,7 +537,10 @@ impl Utf8Parser {
             pos += 1;
             self.bytes_read = 2;
             if self.clen == 2 {
-                return self.ok(pos);
+                let u = ((self.bytes[0] as u32) << 6)
+                    | ((self.bytes[1] as u32) & 0x3f);
+                let c = unsafe { char::from_u32_unchecked(u) };
+                return self.ok(pos, c);
             }
         }
         if self.bytes_read < 3 {
@@ -549,7 +554,11 @@ impl Utf8Parser {
             pos += 1;
             self.bytes_read = 3;
             if self.clen == 3 {
-                return self.ok(pos);
+                let u = (((self.bytes[0] as u32) << 12) & 0xffff)
+                    | (((self.bytes[1] as u32) << 6) & 0xfff)
+                    | ((self.bytes[2] as u32) & 0x3f);
+                let c = unsafe { char::from_u32_unchecked(u) };
+                return self.ok(pos, c);
             }
         }
         if self.bytes_read < 4 {
@@ -562,7 +571,12 @@ impl Utf8Parser {
             }
             pos += 1;
             self.bytes_read = 4;
-            return self.ok(pos);
+            let u = (((self.bytes[0] as u32) << 18) & 0x1fffff)
+                | (((self.bytes[1] as u32) << 12) & 0x3ffff)
+                | (((self.bytes[2] as u32) << 6) & 0xfff)
+                | ((self.bytes[3] as u32) & 0x3f);
+            let c = unsafe { char::from_u32_unchecked(u) };
+            return self.ok(pos, c);
         }
         unreachable!();
     }

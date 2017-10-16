@@ -52,12 +52,12 @@ impl Parser {
         KeyParser::add_key_bytes(
             nodes,
             b"[M",
-            (Key::Char([0, 0, 0, 0], MOUSE_MAGIC), Mods::empty()),
+            (Key::Char('\x00', [0, 0, 0, 0], MOUSE_MAGIC), Mods::empty()),
         );
         KeyParser::add_key_bytes(
             nodes,
             b"[<",
-            (Key::Char([0, 0, 0, 0], SGR_MAGIC), Mods::empty()),
+            (Key::Char('\x00', [0, 0, 0, 0], SGR_MAGIC), Mods::empty()),
         );
     }
 

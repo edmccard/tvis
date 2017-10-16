@@ -20,7 +20,7 @@ pub trait Event: fmt::Debug + Send {
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum Key {
-    Char([u8; 4], u8),
+    Char(char, [u8; 4], u8),
     Err([u8; 4], u8),
     Esc,
     F1,
@@ -53,20 +53,23 @@ pub enum Key {
 #[allow(dead_code)]
 impl Key {
     fn ascii(byte: u8) -> Key {
-        Key::Char([byte, 0, 0, 0], 1)
+        Key::Char(
+            unsafe { ::std::char::from_u32_unchecked(byte as u32) },
+            [byte, 0, 0, 0],
+            1,
+        )
     }
 
     fn empty() -> Key {
-        Key::Char([0, 0, 0, 0], 0)
+        Key::Char('\x00', [0, 0, 0, 0], 0)
     }
 }
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::str::from_utf8;
         match *self {
-            Key::Char(ref bytes, len) => {
-                write!(f, "{}", from_utf8(&bytes[0..len as usize]).unwrap())
+            Key::Char(c, _, _) => {
+                write!(f, "{}", c)
             }
             Key::Err(ref bytes, len) => {
                 write!(f, "{:?}", &bytes[0..len as usize])

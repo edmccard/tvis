@@ -15,24 +15,12 @@ fn main() {
         return;
     }
     screen.start_input().unwrap();
-    let _ = &screen;
-
-    let size = screen.get_size().unwrap();
-    screen.log(&format!("SIZE: {} x {}", size.cols, size.rows));
-    let colors = screen.max_colors().0;
-    screen.log(&format!("COLORS: {}", colors));
-    let styles = screen.supported_styles();
-    screen.log(&format!("STYLES: {:?}", styles));
 
     for evt in rx.iter() {
         if let Some(evt) = evt.as_any().downcast_ref::<InputEvent>() {
             match *evt {
+                InputEvent::Key(Key::Char('`', _, _), _) => return,
                 InputEvent::Key(k, m) => {
-                    if k == Key::Char([96, 0, 0, 0], 1) {
-                        let _ = screen.write("BYE!");
-                        let _ = screen.write("\r\n");
-                        return;
-                    }
                     screen.log(&format!("KEY {}{}\r", m, k,));
                 }
                 _ => {

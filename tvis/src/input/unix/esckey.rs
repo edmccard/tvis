@@ -152,8 +152,8 @@ impl Parser {
                     Found((k, m1)) => {
                         self.reset();
                         match k {
-                            Key::Char(_, MOUSE_MAGIC) => Mouse(Normal),
-                            Key::Char(_, SGR_MAGIC) => Mouse(SGR),
+                            Key::Char(_, _, MOUSE_MAGIC) => Mouse(Normal),
+                            Key::Char(_, _, SGR_MAGIC) => Mouse(SGR),
                             _ => {
                                 // ignore "meta" bit
                                 let m1 = m1.bits | (m & 7);
@@ -206,7 +206,7 @@ impl Parser {
             if node.byte == byte {
                 self.idx = node.children;
                 return match node.key.0 {
-                    Key::Char(_, 0) => Maybe,
+                    Key::Char(_, _, 0) => Maybe,
                     _ => Found(node.key),
                 };
             }

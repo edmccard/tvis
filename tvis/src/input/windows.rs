@@ -238,8 +238,8 @@ fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
         }
         for i in 0..read_count as usize {
             let input = buffer[i];
-            if input.EventType == winapi::FOCUS_EVENT ||
-                input.EventType == winapi::MENU_EVENT
+            if input.EventType == winapi::FOCUS_EVENT
+                || input.EventType == winapi::MENU_EVENT
             {
                 continue;
             }
@@ -307,7 +307,7 @@ impl KeyReader {
                 let c = ::std::char::from_u32(c).unwrap();
                 let len = c.encode_utf8(&mut utf8).len();
                 let kevt = InputEvent::Key(
-                    Key::Char(utf8, len as u8),
+                    Key::Char(c, utf8, len as u8),
                     Mods::win32(evt.dwControlKeyState),
                 );
                 self.send(kevt)?;
@@ -367,6 +367,7 @@ impl KeyReader {
     }
 
     fn key(&self, evt: &KEY_EVENT_RECORD) -> Result<()> {
+        use std::char;
         use input::Mods;
 
         let uc = evt.UnicodeChar;
@@ -381,11 +382,12 @@ impl KeyReader {
                 13 => (Key::Enter, mods - Mods::CTRL),
                 27 => (Key::Esc, mods - Mods::CTRL),
                 b if b < 32 => (Key::ascii(b as u8 + 64), mods | Mods::CTRL),
-                _ => (Key::Char([uc as u8, 0, 0, 0], 1), mods),
+                _ => (Key::ascii(uc as u8), mods),
             }
         } else if uc < 0x800 {
             (
                 Key::Char(
+                    unsafe { char::from_u32_unchecked(uc as u32) },
                     [0xc0 | (uc >> 6) as u8, 0x80 | (uc & 0x3f) as u8, 0, 0],
                     2,
                 ),
@@ -395,6 +397,7 @@ impl KeyReader {
             // Surrogate pairs have already been handled.
             (
                 Key::Char(
+                    unsafe { char::from_u32_unchecked(uc as u32) },
                     [
                         0xe0 | (uc >> 12) as u8,
                         0x80 | ((uc >> 6) & 0x3f) as u8,

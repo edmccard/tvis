@@ -217,7 +217,7 @@ fn raw_event_loop(tx: Sender<Box<Event>>) {
 #[cfg_attr(feature = "cargo-clippy",
            allow(needless_range_loop, needless_pass_by_value))]
 fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
-    let mut scrn_size = ScreenSize::from_conout()?;
+    let mut resizer = Resizer::from_conout()?;
     let in_hndl = Handle::Stdin.win_handle();
     let mut buffer: [winapi::INPUT_RECORD; 128] =
         unsafe { ::std::mem::uninitialized() };
@@ -257,7 +257,7 @@ fn event_loop(tx: Sender<Box<Event>>) -> Result<()> {
                         _ => key_reader.read(kevt)?,
                     }
                 }
-                winapi::WINDOW_BUFFER_SIZE_EVENT => if scrn_size.update()? {
+                winapi::WINDOW_BUFFER_SIZE_EVENT => if resizer.update()? {
                     tx.send(Box::new(InputEvent::Repaint))?;
                 },
                 _ => unreachable!(),
@@ -504,13 +504,13 @@ impl MouseReader {
 }
 
 
-pub(crate) struct ScreenSize {
+pub(crate) struct Resizer {
     hndl: winapi::HANDLE,
     size: winapi::COORD,
 }
 
-impl ScreenSize {
-    fn from_conout() -> Result<ScreenSize> {
+impl Resizer {
+    fn from_conout() -> Result<Resizer> {
         let hndl = unsafe {
             kernel32::CreateFileA(
                 "CONOUT$\x00".as_ptr() as *const _ as winapi::LPCSTR,
@@ -525,16 +525,16 @@ impl ScreenSize {
         if hndl == winapi::INVALID_HANDLE_VALUE {
             return Error::ffi_err("CreateFileA failed");
         }
-        ScreenSize::from_hndl(hndl)
+        Resizer::from_hndl(hndl)
     }
 
-    pub(crate) fn from_hndl(hndl: winapi::HANDLE) -> Result<ScreenSize> {
-        let mut scrn_size = ScreenSize {
+    pub(crate) fn from_hndl(hndl: winapi::HANDLE) -> Result<Resizer> {
+        let mut resizer = Resizer {
             hndl,
             size: winapi::COORD { X: -1, Y: -1 },
         };
-        scrn_size.update()?;
-        Ok(scrn_size)
+        resizer.update()?;
+        Ok(resizer)
     }
 
     fn update(&mut self) -> Result<bool> {

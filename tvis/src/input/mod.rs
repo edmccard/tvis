@@ -10,7 +10,7 @@ mod platform;
 
 pub(crate) use self::platform::start_threads;
 #[cfg(windows)]
-pub(crate) use self::platform::ScreenSize;
+pub(crate) use self::platform::Resizer;
 
 use Coords;
 

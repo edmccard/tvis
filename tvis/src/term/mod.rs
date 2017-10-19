@@ -28,7 +28,6 @@ bitflags! {
     }
 }
 
-#[cfg(not(windows))]
 impl Style {
     fn count(&self) -> u32 {
         self.bits.count_ones()
@@ -85,7 +84,9 @@ pub trait Terminal {
     fn get_bg(&self) -> Color;
     fn set_style(&mut self, style: Style, fg: Color, bg: Color) -> Result<()>;
     fn set_cursor(&mut self, coords: Coords) -> Result<()>;
+    fn cursor_visible(&mut self, visible: bool) -> Result<()>;
     fn write(&mut self, text: &str) -> Result<()>;
+    fn clear(&mut self) -> Result<()>;
     fn flush_output(&mut self) -> Result<()>;
     #[cfg(debug_assertions)]
     fn log(&mut self, text: &str);

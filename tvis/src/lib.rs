@@ -6,6 +6,7 @@ extern crate kernel32;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
+#[cfg(not(windows))]
 #[macro_use]
 extern crate tinf;
 extern crate tvis_util;
@@ -104,6 +105,7 @@ impl error::Error for Error {
 pub type Result<T> = result::Result<T, Error>;
 
 #[allow(dead_code)]
+#[cfg(not(windows))]
 const SILENCE_WARNING_FOR_TEST_ONLY_MACRO_USE: [tinf::Param; 0] = params!();
 
 #[cfg(not(windows))]

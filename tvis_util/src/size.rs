@@ -9,8 +9,8 @@ use Handle;
 /// The dimensions of a terminal window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WinSize {
-    pub cols: u32,
-    pub rows: u32,
+    pub cols: u16,
+    pub rows: u16,
 }
 
 impl Default for WinSize {
@@ -24,18 +24,20 @@ impl Default for WinSize {
 /// Does not work in a Cygwin/MSYS2 window.
 #[cfg(windows)]
 pub fn get_size(handle: Handle) -> Option<WinSize> {
-    use std::mem;
+    get_screen_buffer_size(handle.win_handle())
+}
 
-    let hndl = handle.win_handle();
+#[cfg(windows)]
+pub fn get_screen_buffer_size(hndl: winapi::HANDLE) -> Option<WinSize> {
     let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
-        unsafe { mem::uninitialized() };
+        unsafe { ::std::mem::uninitialized() };
     let res = unsafe { kernel32::GetConsoleScreenBufferInfo(hndl, &mut csbi) };
     if res == 0 {
         return None;
     }
     Some(WinSize {
-        cols: (csbi.srWindow.Right - csbi.srWindow.Left + 1) as u32,
-        rows: (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u32,
+        cols: (csbi.srWindow.Right - csbi.srWindow.Left + 1) as u16,
+        rows: (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u16,
     })
 }
 
@@ -58,8 +60,8 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
         return None;
     }
     Some(WinSize {
-        cols: u32::from(win.ws_col),
-        rows: u32::from(win.ws_row),
+        cols: u16::from(win.ws_col),
+        rows: u16::from(win.ws_row),
     })
 }
 
@@ -96,7 +98,7 @@ pub fn get_default_console_size() -> WinSize {
         return Default::default();
     }
     WinSize {
-        cols: (data & 0xffff) as u32,
-        rows: (data >> 16) as u32,
+        cols: (data & 0xffff) as u16,
+        rows: (data >> 16) as u16,
     }
 }

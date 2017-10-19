@@ -155,6 +155,7 @@ impl ConsoleMode {
                 kernel32::SetConsoleMode(hndl, mode);
                 ConsoleMode::Legacy
             } else {
+                kernel32::SetConsoleMode(hndl, mode);
                 ConsoleMode::Win10
             }
         }

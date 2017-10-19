@@ -46,8 +46,8 @@ impl Styles {
         if desc[cap::sgr0].is_empty() {
             return styles;
         }
-        styles.sgr0 = desc[cap::sgr0].to_vec();
 
+        styles.sgr0 = desc[cap::sgr0].to_vec();
         styles.colors = match desc[cap::colors] {
             0xffff => 0,
             c => c as usize,
@@ -243,6 +243,11 @@ impl Styles {
 pub(in term) struct Term<'a> {
     styles: Styles,
     cup: Vec<u8>,
+    smcup: Vec<u8>,
+    rmcup: Vec<u8>,
+    civis: Vec<u8>,
+    cnorm: Vec<u8>,
+    clear: Vec<u8>,
     stdout: io::StdoutLock<'a>,
     init_ios: libc::termios,
     tx: Option<Sender<Box<Event>>>,
@@ -260,12 +265,16 @@ impl<'a> Term<'a> {
             panic!("TODO: better singleton panic message");
         }
         let init_ios = Term::set_ios()?;
-        Term::init(STDOUT.lock())?;
         let desc = Desc::current();
-        let term = Term {
+        let mut term = Term {
             styles: Styles::new(desc, use_tc, b_b),
             stdout: STDOUT.lock(),
             cup: desc[cap::cup].to_vec(),
+            smcup: desc[cap::smcup].to_vec(),
+            rmcup: desc[cap::rmcup].to_vec(),
+            civis: desc[cap::civis].to_vec(),
+            cnorm: desc[cap::cnorm].to_vec(),
+            clear: desc[cap::clear].to_vec(),
             tmode: (
                 Handle::Stdout.terminal_mode(),
                 Handle::Stdin.terminal_mode(),
@@ -274,6 +283,7 @@ impl<'a> Term<'a> {
             init_ios,
             tx,
         };
+        term.init()?;
         Ok(Box::new(term))
     }
 
@@ -292,11 +302,24 @@ impl<'a> Term<'a> {
         }
     }
 
-    fn init(_: io::StdoutLock) -> Result<()> {
+    fn init(&mut self) -> Result<()> {
+        if !self.is_tty_output() {
+            return Ok(());
+        }
+        self.stdout.write_all(&self.smcup)?;
         Ok(())
     }
 
-    fn init_mouse(&mut self) -> Result<()> {
+    fn uninit(&mut self) -> Result<()> {
+        self.stdout.write_all(&self.rmcup)?;
+        self.stdout.write_all(&self.cnorm)?;
+        Ok(())
+    }
+
+    fn start_mouse_input(&mut self) -> Result<()> {
+        if !self.is_tty_input() {
+            return Ok(());
+        }
         self.stdout.write_all(b"\x1b[?1000h")?;
         self.stdout.write_all(b"\x1b[?1003h")?;
         if self.rxvt {
@@ -306,13 +329,17 @@ impl<'a> Term<'a> {
         Ok(())
     }
 
-    fn drop_mouse(&mut self) {
-        let _ = self.stdout.write_all(b"\x1b[?1000l");
-        let _ = self.stdout.write_all(b"\x1b[?1003l");
-        if self.rxvt {
-            let _ = self.stdout.write_all(b"\x1b[?1015l");
+    fn end_mouse_input(&mut self) -> Result<()> {
+        if !self.is_tty_input() {
+            return Ok(());
         }
-        let _ = self.stdout.write_all(b"\x1b[?1006l");
+        self.stdout.write_all(b"\x1b[?1000l")?;
+        self.stdout.write_all(b"\x1b[?1003l")?;
+        if self.rxvt {
+            self.stdout.write_all(b"\x1b[?1015l")?;
+        }
+        self.stdout.write_all(b"\x1b[?1006l")?;
+        Ok(())
     }
 }
 
@@ -326,7 +353,7 @@ impl<'a> Terminal for Term<'a> {
     }
 
     fn start_input(&mut self) -> Result<()> {
-        self.init_mouse()?;
+        self.start_mouse_input()?;
         self.stdout.flush()?;
         ::input::start_threads(
             self.tx.take().expect("start_input may only be called once"),
@@ -371,14 +398,30 @@ impl<'a> Terminal for Term<'a> {
         tparm(
             &mut self.stdout,
             &self.cup,
-            &mut params!(coords.0, coords.1),
+            &mut params!(coords.1, coords.0),
             &mut ::tinf::Vars::new(),
         )?;
         Ok(())
     }
 
+    fn cursor_visible(&mut self, visible: bool) -> Result<()> {
+        // TODO: error if capability not present?
+        let cmd = if visible {
+            &self.cnorm
+        } else {
+            &self.civis
+        };
+        self.stdout.write_all(cmd)?;
+        Ok(())
+    }
+
     fn write(&mut self, text: &str) -> Result<()> {
         write!(self.stdout, "{}", text)?;
+        Ok(())
+    }
+
+    fn clear(&mut self) -> Result<()> {
+        self.stdout.write_all(&self.clear)?;
         Ok(())
     }
 
@@ -397,7 +440,8 @@ impl<'a> Terminal for Term<'a> {
 
 impl<'a> Drop for Term<'a> {
     fn drop(&mut self) {
-        self.drop_mouse();
+        let _ = self.end_mouse_input();
+        let _ = self.uninit();
         let _ = self.styles.sgr0(&mut self.stdout);
         let _ = self.stdout.flush();
         unsafe {

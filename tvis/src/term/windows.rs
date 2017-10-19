@@ -6,7 +6,7 @@ use std::sync::mpsc::Sender;
 use winapi;
 use kernel32;
 use tvis_util::{ConsoleMode, Handle};
-use tvis_util::size::get_size;
+use tvis_util::size::get_screen_buffer_size;
 use tvis_util::color;
 use input::Event;
 use term::{BoldOrBright, Color, Style, Terminal, UseTruecolor, WinSize, TERM};
@@ -14,6 +14,10 @@ use {Coords, Error, Result};
 
 // winapi omits this.
 const ENABLE_VIRTUAL_TERMINAL_INPUT: winapi::DWORD = 0x0200;
+
+// Translate from windows console colors to ANSI terminal colors.
+const CONSOLE_COLORS: [winapi::USHORT; 16] =
+    [0, 4, 2, 6, 1, 5, 3, 7, 8, 12, 10, 14, 9, 13, 11, 15];
 
 #[derive(Default)]
 struct Styles {
@@ -135,6 +139,8 @@ impl Styles {
         if fi != curr_fi || bi != curr_bi {
             self.fg = Color::Palette(fi as u8);
             self.bg = Color::Palette(bi as u8);
+            let fi = CONSOLE_COLORS[fi as usize];
+            let bi = CONSOLE_COLORS[bi as usize];
             color::set_colors(h, (fi, bi));
         }
         Ok(())
@@ -147,6 +153,99 @@ impl Styles {
         bg: Color,
         style: Style,
     ) -> Result<()> {
+        let clears = self.style - style;
+        let sets = style - self.style;
+        if clears.contains(Style::BOLD)
+            || (1 + style.count()) <= (clears.count() + sets.count())
+        {
+            self.sgr0(h)?;
+            self.style_win10(h, fg, bg, style)?;
+        } else {
+            if clears.contains(Style::UNDERLINE) {
+                write_handle(h, "\x1b[24m")?;
+                self.style.remove(Style::UNDERLINE);
+            }
+            if sets.contains(Style::BOLD) {
+                write_handle(h, "\x1b[1m")?;
+                self.style.insert(Style::BOLD);
+            }
+            if sets.contains(Style::UNDERLINE) {
+                write_handle(h, "\x1b[4m")?;
+                self.style.insert(Style::UNDERLINE);
+            }
+            if fg == Color::Default && fg != self.fg {
+                self.fg = Color::Default;
+                write_handle(h, "\x1b[39m")?;
+            }
+            if bg == Color::Default && bg != self.bg {
+                self.bg = Color::Default;
+                write_handle(h, "\x1b[49m")?;
+            }
+            if fg != self.fg {
+                match fg {
+                    Color::Palette(i) => {
+                        write_handle(h, &Styles::palette_string(true, i))?;
+                        self.fg = Color::Palette(i);
+                    }
+                    Color::TrueColor(r, g, b) => {
+                        write_handle(h, &Styles::tc_string(true, r, g, b))?;
+                        self.fg = fg;
+                    }
+                    _ => (),
+                }
+            }
+            if bg != self.bg {
+                match bg {
+                    Color::Palette(i) => {
+                        write_handle(h, &Styles::palette_string(false, i))?;
+                        self.bg = bg;
+                    }
+                    Color::TrueColor(r, g, b) => {
+                        write_handle(h, &Styles::tc_string(false, r, g, b))?;
+                        self.bg = bg;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn palette_string(foreground: bool, c: u8) -> String {
+        let mut color = String::from("\x1b[");
+        if foreground {
+            color.push('3')
+        } else {
+            color.push('4')
+        }
+        color.push_str("8;5;");
+        color.push_str(&c.to_string());
+        color.push('m');
+        color
+    }
+
+    fn tc_string(foreground: bool, r: u8, g: u8, b: u8) -> String {
+        let mut color = String::from("\x1b[");
+        if foreground {
+            color.push('3');
+        } else {
+            color.push('4');
+        }
+        color.push_str("8;2;");
+        color.push_str(&r.to_string());
+        color.push(';');
+        color.push_str(&g.to_string());
+        color.push(';');
+        color.push_str(&b.to_string());
+        color.push('m');
+        color
+    }
+
+    fn sgr0(&mut self, h: winapi::HANDLE) -> Result<()> {
+        self.style = Style::empty();
+        self.fg = Color::Default;
+        self.bg = Color::Default;
+        write_handle(h, "\x1b[0m")?;
         Ok(())
     }
 }
@@ -160,6 +259,8 @@ pub(in term) struct Term {
     tx: Option<Sender<Box<Event>>>,
     cmode: (ConsoleMode, ConsoleMode),
     init_cp: (winapi::UINT, winapi::UINT),
+    cursor_height: winapi::DWORD,
+    cursor_visibility: bool,
 }
 
 impl Term {
@@ -185,6 +286,8 @@ impl Term {
             tx,
             cmode: (out_mode, Handle::Stdin.console_mode()),
             init_cp: (0, 0),
+            cursor_height: 0,
+            cursor_visibility: true,
         };
         term.set_mode()?;
         term.set_buffer()?;
@@ -227,11 +330,19 @@ impl Term {
             return Error::ffi_err("CreateConsoleScreenBuffer failed");
         }
 
-        ::input::ScreenSize::from_hndl(hndl)?;
+        ::input::Resizer::from_hndl(hndl)?;
 
         if 0 == unsafe { kernel32::SetConsoleActiveScreenBuffer(hndl) } {
             return Error::ffi_err("SetConsoleActiveScreenBuffer failed");
         }
+
+        let mut cci: winapi::CONSOLE_CURSOR_INFO =
+            unsafe { ::std::mem::uninitialized() };
+        if 0 == unsafe { kernel32::GetConsoleCursorInfo(hndl, &mut cci) } {
+            return Error::ffi_err("GetConsoleCursorInfo failed");
+        }
+        self.cursor_height = cci.dwSize;
+        self.cursor_visibility = if cci.bVisible == 0 { false } else { true };
 
         self.out_hndl = hndl;
         Ok(())
@@ -249,6 +360,59 @@ impl Term {
             return Error::ffi_err("SetConsoleCP failed");
         }
         Ok(())
+    }
+
+    fn clear_legacy(&mut self) -> Result<()> {
+        let size = self.get_size()?;
+        let num_blanks: winapi::DWORD = size.rows as u32 * size.cols as u32;
+        let mut blanks_written: winapi::DWORD = 0;
+        let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
+            unsafe { ::std::mem::uninitialized() };
+        if 0 == unsafe {
+            kernel32::FillConsoleOutputCharacterA(
+                self.out_hndl,
+                32,
+                num_blanks,
+                winapi::COORD { X: 0, Y: 0 },
+                &mut blanks_written,
+            )
+        } {
+            return Error::ffi_err("FillConsoleOutputCharacterA failed");
+        }
+        if 0 == unsafe {
+            kernel32::GetConsoleScreenBufferInfo(self.out_hndl, &mut csbi)
+        } {
+            return Error::ffi_err("GetConsoleScreenBufferInfo failed");
+        }
+        if 0 == unsafe {
+            kernel32::FillConsoleOutputAttribute(
+                self.out_hndl,
+                csbi.wAttributes,
+                num_blanks,
+                winapi::COORD { X: 0, Y: 0 },
+                &mut blanks_written,
+            )
+        } {
+            return Error::ffi_err("FillConsoleOutputAttribute failed");
+        }
+        self.set_cursor((0, 0))?;
+        Ok(())
+    }
+
+    fn clear_win10(&mut self) -> Result<()> {
+        // Using the virtual terminal escape sequence interacts
+        // weirdly when the screen is not the same size as the screen
+        // buffer.
+        // write_handle(self.out_hndl, "\x1b[2J")
+
+        let size = self.get_size()?;
+        let num_blanks = size.rows as usize * size.cols as usize;
+        self.set_cursor((0, 0))?;
+        self.write(&" ".repeat(num_blanks))?;
+        self.set_cursor((0, 0))?;
+
+        let vis = self.cursor_visibility;
+        self.cursor_visible(vis)
     }
 }
 
@@ -278,7 +442,7 @@ impl Terminal for Term {
     }
 
     fn get_size(&self) -> Result<WinSize> {
-        match get_size(Handle::Stdout) {
+        match get_screen_buffer_size(self.out_hndl) {
             Some(ws) => Ok(ws),
             None => Error::ffi_err("GetConsoleScreenBufferInfo failed"),
         }
@@ -316,20 +480,28 @@ impl Terminal for Term {
         Ok(())
     }
 
-    fn write(&mut self, text: &str) -> Result<()> {
-        let mut count: winapi::DWORD = 0;
-        if 0 == unsafe {
-            kernel32::WriteConsoleA(
-                self.out_hndl,
-                text.as_ptr() as *const _ as *const winapi::VOID,
-                text.len() as winapi::DWORD,
-                &mut count,
-                ptr::null_mut(),
-            )
-        } {
-            return Error::ffi_err("WriteConsoleA failed");
+    fn cursor_visible(&mut self, visible: bool) -> Result<()> {
+        let cci = winapi::CONSOLE_CURSOR_INFO {
+            dwSize: self.cursor_height,
+            bVisible: if visible { 1 } else { 0 },
+        };
+        if 0 == unsafe { kernel32::SetConsoleCursorInfo(self.out_hndl, &cci) } {
+            return Error::ffi_err("SetConsoleCursorInfo failed");
         }
+        self.cursor_visibility = visible;
         Ok(())
+    }
+
+    fn write(&mut self, text: &str) -> Result<()> {
+        write_handle(self.out_hndl, text)
+    }
+
+    fn clear(&mut self) -> Result<()> {
+        match self.cmode.0 {
+            ConsoleMode::Legacy => self.clear_legacy(),
+            ConsoleMode::Win10 => self.clear_win10(),
+            _ => Ok(()),
+        }
     }
 
     fn flush_output(&mut self) -> Result<()> {
@@ -356,13 +528,28 @@ impl Terminal for Term {
 impl Drop for Term {
     fn drop(&mut self) {
         unsafe {
-            if let Some(mode) = self.init_in_mode {
-                kernel32::SetConsoleMode(self.in_hndl, mode);
-            }
             kernel32::SetConsoleActiveScreenBuffer(self.init_out_hndl);
             kernel32::SetConsoleOutputCP(self.init_cp.0);
             kernel32::SetConsoleCP(self.init_cp.1);
-            // TODO: remember how to handle init_out_mode
+            if let Some(mode) = self.init_in_mode {
+                kernel32::SetConsoleMode(self.in_hndl, mode);
+            }
         }
     }
+}
+
+fn write_handle(hndl: winapi::HANDLE, text: &str) -> Result<()> {
+    let mut count: winapi::DWORD = 0;
+    if 0 == unsafe {
+        kernel32::WriteConsoleA(
+            hndl,
+            text.as_ptr() as *const _ as *const winapi::VOID,
+            text.len() as winapi::DWORD,
+            &mut count,
+            ptr::null_mut(),
+        )
+    } {
+        return Error::ffi_err("WriteConsoleA failed");
+    }
+    Ok(())
 }

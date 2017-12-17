@@ -258,7 +258,6 @@ fn get_em(desc: &Desc) -> Vec<u8> {
     Vec::new()
 }
 
-
 impl CLIStream for TermStream<io::Stdout> {
     fn rewind_lines(&mut self, count: u16) -> Result<()> {
         self.rewind_lines(count)

@@ -47,7 +47,6 @@ impl Default for Color {
     }
 }
 
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum UseTruecolor {
     /// Always support truecolor.

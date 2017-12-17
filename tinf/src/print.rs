@@ -96,7 +96,6 @@ where
     }
 }
 
-
 /// Variables for [`tparm`](fn.tparm.html).
 #[derive(Debug, Default)]
 pub struct Vars(Vec<Param>);
@@ -579,7 +578,6 @@ impl Formatter {
     }
 }
 
-
 // Utility trait for writing single bytes.
 trait BytePusher: Write {
     fn push(&mut self, val: u8) -> io::Result<()> {
@@ -717,7 +715,6 @@ pub fn tputs(
     }
     Ok(())
 }
-
 
 /// An error that occurred while preparing or printing a string
 /// capability.

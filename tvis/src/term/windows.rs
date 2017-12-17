@@ -309,7 +309,9 @@ impl Term {
                 & !ENABLE_VIRTUAL_TERMINAL_INPUT
                 | winapi::ENABLE_EXTENDED_FLAGS;
         }
-        if 0 == unsafe { kernel32::SetConsoleMode(self.in_hndl, in_mode) } {
+        if 0 == unsafe {
+            kernel32::SetConsoleMode(self.in_hndl, in_mode)
+        } {
             return Error::ffi_err("SetConsoleMode failed");
         }
         self.init_in_mode = Some(init_in_mode);
@@ -476,7 +478,9 @@ impl Terminal for Term {
         // (and to prevent unexpected panics if set_cursor gets called
         // after the screen shrinks but before a repaint event is
         // processed).
-        unsafe { kernel32::SetConsoleCursorPosition(self.out_hndl, pos) };
+        unsafe {
+            kernel32::SetConsoleCursorPosition(self.out_hndl, pos)
+        };
         Ok(())
     }
 
@@ -485,7 +489,9 @@ impl Terminal for Term {
             dwSize: self.cursor_height,
             bVisible: if visible { 1 } else { 0 },
         };
-        if 0 == unsafe { kernel32::SetConsoleCursorInfo(self.out_hndl, &cci) } {
+        if 0 == unsafe {
+            kernel32::SetConsoleCursorInfo(self.out_hndl, &cci)
+        } {
             return Error::ffi_err("SetConsoleCursorInfo failed");
         }
         self.cursor_visibility = visible;

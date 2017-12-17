@@ -714,7 +714,6 @@ impl Iterator for StrIter {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub(super) enum CapName {
     P(usize),
@@ -730,7 +729,6 @@ pub(super) enum ICap {
 
 /// A generic capability name / value pair.
 pub struct Cap(pub(super) ICap);
-
 
 impl From<(Boolean, bool)> for Cap {
     fn from(val: (Boolean, bool)) -> Cap {
@@ -782,7 +780,6 @@ where
         ))
     }
 }
-
 
 static DEF_BOOL: bool = false;
 

@@ -2,7 +2,6 @@ use std::io;
 
 use {Color, Result, Stream};
 
-
 /// A [`Stream`](trait.Stream.html) that records writes and style
 /// changes.
 #[derive(Default)]

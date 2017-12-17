@@ -497,8 +497,7 @@ impl Utf8Parser {
     }
 
     fn err(&mut self, pos: usize) -> Utf8Result {
-        let ret =
-            Utf8Result::Err((self.bytes, self.bytes_read, '\x00'), pos);
+        let ret = Utf8Result::Err((self.bytes, self.bytes_read, '\x00'), pos);
         self.bytes_read = 0;
         ret
     }

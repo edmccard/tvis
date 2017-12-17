@@ -31,7 +31,8 @@ pub fn get_size(handle: Handle) -> Option<WinSize> {
 pub fn get_screen_buffer_size(hndl: winapi::HANDLE) -> Option<WinSize> {
     let mut csbi: winapi::CONSOLE_SCREEN_BUFFER_INFO =
         unsafe { ::std::mem::uninitialized() };
-    let res = unsafe { kernel32::GetConsoleScreenBufferInfo(hndl, &mut csbi) };
+    let res =
+        unsafe { kernel32::GetConsoleScreenBufferInfo(hndl, &mut csbi) };
     if res == 0 {
         return None;
     }
@@ -55,7 +56,8 @@ pub fn get_cygwin_size(w: &io::Write, defsz: WinSize) -> WinSize {
 #[cfg(not(windows))]
 pub fn get_size(handle: Handle) -> Option<WinSize> {
     let win: ::libc::winsize = unsafe { ::std::mem::uninitialized() };
-    let res = unsafe { ::libc::ioctl(handle.fd(), ::libc::TIOCGWINSZ, &win) };
+    let res =
+        unsafe { ::libc::ioctl(handle.fd(), ::libc::TIOCGWINSZ, &win) };
     if res != 0 {
         return None;
     }

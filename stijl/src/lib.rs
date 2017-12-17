@@ -137,7 +137,6 @@ pub use self::buf::BufStream;
 mod term;
 pub use self::term::TermStream;
 
-
 /// A [`LockableStream`](trait.LockableStream.html) wrapping `stdout`.
 pub fn stdout(do_style: DoStyle) -> Box<LockableStream> {
     match Handle::Stdout.terminal_mode() {
@@ -155,7 +154,6 @@ pub fn stderr(do_style: DoStyle) -> Box<LockableStream> {
         mode => Box::new(TermStream::std(mode, io::stderr(), do_style)),
     }
 }
-
 
 /// Strategies for applying styles to text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,7 +189,6 @@ pub const Magenta: Color = Color(5, 5);
 pub const Cyan: Color = Color(6, 3);
 /// Color 7
 pub const White: Color = Color(7, 7);
-
 
 /// An output stream with simple styling.
 pub trait Stream: io::Write {

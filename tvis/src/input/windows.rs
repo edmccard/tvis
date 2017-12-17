@@ -97,7 +97,9 @@ unsafe fn create_session_wnd() -> Result<()> {
                 thread::sleep(time::Duration::from_secs(5));
                 0
             }
-            _ => unsafe { user32::DefWindowProcA(hwnd, msg, wparam, lparam) },
+            _ => unsafe {
+                user32::DefWindowProcA(hwnd, msg, wparam, lparam)
+            },
         }
     }
 
@@ -196,7 +198,8 @@ unsafe fn run_message_pump() {
 }
 
 fn write_fake_key(key_code: u16) -> winapi::BOOL {
-    let mut key: winapi::INPUT_RECORD = unsafe { ::std::mem::uninitialized() };
+    let mut key: winapi::INPUT_RECORD =
+        unsafe { ::std::mem::uninitialized() };
     key.EventType = winapi::KEY_EVENT;
     {
         let key = unsafe { key.KeyEvent_mut() };
@@ -205,7 +208,9 @@ fn write_fake_key(key_code: u16) -> winapi::BOOL {
     }
     let con_hndl = Handle::Stdin.win_handle();
     let mut write_count: winapi::DWORD = 0;
-    unsafe { kernel32::WriteConsoleInputW(con_hndl, &key, 1, &mut write_count) }
+    unsafe {
+        kernel32::WriteConsoleInputW(con_hndl, &key, 1, &mut write_count)
+    }
 }
 
 fn raw_event_loop(tx: Sender<Box<Event>>) {
@@ -502,7 +507,6 @@ impl MouseReader {
         Ok(())
     }
 }
-
 
 pub(crate) struct Resizer {
     hndl: winapi::HANDLE,

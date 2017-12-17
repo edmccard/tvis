@@ -68,9 +68,7 @@ impl Key {
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Key::Char(c, _, _) => {
-                write!(f, "{}", c)
-            }
+            Key::Char(c, _, _) => write!(f, "{}", c),
             Key::Err(ref bytes, len) => {
                 write!(f, "{:?}", &bytes[0..len as usize])
             }
@@ -88,7 +86,6 @@ bitflags! {
         const CTRL_ALT = Self::CTRL.bits | Self::ALT.bits;
     }
 }
-
 
 // 0b001 = Shift
 // 0b010 = Alt

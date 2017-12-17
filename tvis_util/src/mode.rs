@@ -42,7 +42,8 @@ impl TerminalMode {
             ConsoleMode::None => (),
         }
 
-        let hndl = unsafe { kernel32::GetStdHandle(handle as winapi::DWORD) };
+        let hndl =
+            unsafe { kernel32::GetStdHandle(handle as winapi::DWORD) };
         match msys_cygwin(hndl) {
             Some(true) => TerminalMode::Cygwin,
             _ => TerminalMode::Redir,
@@ -70,8 +71,9 @@ fn msys_cygwin(hndl: winapi::HANDLE) -> Option<bool> {
         return None;
     }
 
-    let file_info =
-        unsafe { *(raw_info[0..sz].as_ptr() as *const winapi::FILE_NAME_INFO) };
+    let file_info = unsafe {
+        *(raw_info[0..sz].as_ptr() as *const winapi::FILE_NAME_INFO)
+    };
     let name = &raw_info[sz..sz + file_info.FileNameLength as usize];
     let name = unsafe {
         ::std::slice::from_raw_parts(

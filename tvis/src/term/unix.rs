@@ -123,7 +123,11 @@ impl Styles {
 
     fn max_colors(&self) -> (usize, usize, bool) {
         let tc = !self.setftc.is_empty();
-        let bgs = if self.bright16 { 8 } else { self.colors };
+        let bgs = if self.bright16 {
+            8
+        } else {
+            self.colors
+        };
         (self.colors, bgs, tc)
     }
 

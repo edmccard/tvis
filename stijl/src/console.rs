@@ -7,7 +7,6 @@ use tvis_util::{ConsoleMode, Handle};
 use tvis_util::{color, size};
 use {CLIStream, Color, DoStyle, LockableStream, Result, Stream, WinSize};
 
-
 /// A styled stream using the Windows Console API.
 pub struct ConStream<T> {
     w: T,
@@ -33,7 +32,8 @@ impl ConStream<io::Stderr> {
 
 impl<T: Write> ConStream<T> {
     fn init(w: T, handle: Handle, do_style: DoStyle) -> ConStream<T> {
-        let hndl = unsafe { kernel32::GetStdHandle(handle as winapi::DWORD) };
+        let hndl =
+            unsafe { kernel32::GetStdHandle(handle as winapi::DWORD) };
         let is_atty = handle.console_mode() != ConsoleMode::None;
         let do_style = is_atty && (do_style != DoStyle::Never);
         let orig_pair = match do_style {

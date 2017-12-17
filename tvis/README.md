@@ -26,4 +26,3 @@ extern crate tvis;
 
 ```rust
 ```
-)

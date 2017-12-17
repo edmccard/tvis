@@ -59,7 +59,6 @@ pub use self::print::{tparm, tputs, CapError, Param, ToParamFromInt,
                       ToParamFromStr, Vars};
 use self::cap::{Cap, CapName, ICap, UserDef};
 
-
 /// The names and capabilities that make up a terminal description.
 ///
 /// Predefined capabilities are read by indexing a `Desc` object
@@ -150,10 +149,12 @@ impl Desc {
         let d1 = to_path(env::var("TERMINFO").ok());
         let d2 = to_path(env::home_dir()).map(|d| d.join(".terminfo"));
         let d3 = to_paths(env::var("TERMINFO_DIRS").ok());
-        let d3 = d3.into_iter().map(|d| if d.as_os_str().is_empty() {
-            path_to_root("usr/share/terminfo")
-        } else {
-            d
+        let d3 = d3.into_iter().map(|d| {
+            if d.as_os_str().is_empty() {
+                path_to_root("usr/share/terminfo")
+            } else {
+                d
+            }
         });
         let d4 = vec![
             path_to_root("etc/terminfo"),
@@ -490,7 +491,6 @@ impl Desc {
     }
 }
 
-
 /// A syntax for [`Desc`](struct.Desc.html) literals.
 ///
 /// # Examples
@@ -584,7 +584,6 @@ macro_rules! desc {
     };
 }
 
-
 // The terminfo binary format contains padding bytes as necessary to
 // keep u16 data chunks at word-aligned file offsets. `AlignReader`
 // handles this padding (as well as endianness) when reading bytes and
@@ -662,7 +661,6 @@ fn to_paths(var: Option<String>) -> Vec<PathBuf> {
         Some(d) => env::split_paths(&d).collect(),
     }
 }
-
 
 lazy_static! {
     static ref CURRENT: Desc = {

@@ -1,7 +1,6 @@
 use std::io::Cursor;
 use super::*;
 
-
 #[test]
 fn desc_file() {
     use super::cap::*;

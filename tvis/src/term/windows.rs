@@ -472,11 +472,11 @@ impl Terminal for Term {
             X: coords.0 as i16,
             Y: coords.1 as i16,
         };
-        if 0 == unsafe {
-            kernel32::SetConsoleCursorPosition(self.out_hndl, pos)
-        } {
-            return Error::ffi_err("SetConsoleCursorPosition failed");
-        }
+        // No error on invalid coordinates, to match Linux behavior
+        // (and to prevent unexpected panics if set_cursor gets called
+        // after the screen shrinks but before a repaint event is
+        // processed).
+        unsafe { kernel32::SetConsoleCursorPosition(self.out_hndl, pos) };
         Ok(())
     }
 

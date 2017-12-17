@@ -311,7 +311,9 @@ impl<'a> Term<'a> {
     }
 
     fn uninit(&mut self) -> Result<()> {
-        self.stdout.write_all(&self.rmcup)?;
+        if !::std::thread::panicking() {
+            self.stdout.write_all(&self.rmcup)?;
+        }
         self.stdout.write_all(&self.cnorm)?;
         Ok(())
     }

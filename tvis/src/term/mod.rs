@@ -102,7 +102,7 @@ pub fn connect(
 pub fn connect_with_input(
     tx: Sender<Box<Event>>,
     use_tc: UseTruecolor,
-    b_b: BoldOrBright
+    b_b: BoldOrBright,
 ) -> Result<Box<Terminal>> {
     Term::connect(Some(tx), use_tc, b_b)
 }
